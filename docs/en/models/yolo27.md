@@ -92,21 +92,18 @@ YOLO26 is compared using its end-to-end (one-to-one head) numbers, matching YOLO
 
 ## Supported Tasks and Modes
 
-YOLO27 supports the following tasks across its five model scales. Detection, instance segmentation, depth
-estimation, and classification are available today with training, validation, inference, and export support; the
-remaining tasks are training now and will be released as they finalize:
+YOLO27 supports the following tasks across its five model scales, all with training, validation, inference, and
+export support:
 
 | Model        | Filenames                                                                                      | Task                                          | Training | Validation | Inference | Export |
 | ------------ | ---------------------------------------------------------------------------------------------- | --------------------------------------------- | -------- | ---------- | --------- | ------ |
 | YOLO27       | `yolo27n.pt` `yolo27s.pt` `yolo27m.pt` `yolo27l.pt` `yolo27x.pt`                               | [Detection](../tasks/detect.md)               | ✅       | ✅         | ✅        | ✅     |
 | YOLO27-seg   | `yolo27n-seg.pt` `yolo27s-seg.pt` `yolo27m-seg.pt` `yolo27l-seg.pt` `yolo27x-seg.pt`           | [Instance Segmentation](../tasks/segment.md)  | ✅       | ✅         | ✅        | ✅     |
-| YOLO27-sem   | `yolo27n-sem.pt` `yolo27s-sem.pt` `yolo27m-sem.pt` `yolo27l-sem.pt` `yolo27x-sem.pt`           | [Semantic Segmentation](../tasks/semantic.md) | 🚧       | 🚧         | 🚧        | 🚧     |
+| YOLO27-sem   | `yolo27n-sem.pt` `yolo27s-sem.pt` `yolo27m-sem.pt` `yolo27l-sem.pt` `yolo27x-sem.pt`           | [Semantic Segmentation](../tasks/semantic.md) | ✅       | ✅         | ✅        | ✅     |
 | YOLO27-depth | `yolo27n-depth.pt` `yolo27s-depth.pt` `yolo27m-depth.pt` `yolo27l-depth.pt` `yolo27x-depth.pt` | [Depth Estimation](../tasks/depth.md)         | ✅       | ✅         | ✅        | ✅     |
 | YOLO27-cls   | `yolo27n-cls.pt` `yolo27s-cls.pt` `yolo27m-cls.pt` `yolo27l-cls.pt` `yolo27x-cls.pt`           | [Classification](../tasks/classify.md)        | ✅       | ✅         | ✅        | ✅     |
-| YOLO27-pose  | `yolo27n-pose.pt` `yolo27s-pose.pt` `yolo27m-pose.pt` `yolo27l-pose.pt` `yolo27x-pose.pt`      | [Pose/Keypoints](../tasks/pose.md)            | 🚧       | 🚧         | 🚧        | 🚧     |
-| YOLO27-obb   | `yolo27n-obb.pt` `yolo27s-obb.pt` `yolo27m-obb.pt` `yolo27l-obb.pt` `yolo27x-obb.pt`           | [Oriented Detection](../tasks/obb.md)         | 🚧       | 🚧         | 🚧        | 🚧     |
-
-🚧 Models are currently training and will be released as they finalize.
+| YOLO27-pose  | `yolo27n-pose.pt` `yolo27s-pose.pt` `yolo27m-pose.pt` `yolo27l-pose.pt` `yolo27x-pose.pt`      | [Pose/Keypoints](../tasks/pose.md)            | ✅       | ✅         | ✅        | ✅     |
+| YOLO27-obb   | `yolo27n-obb.pt` `yolo27s-obb.pt` `yolo27m-obb.pt` `yolo27l-obb.pt` `yolo27x-obb.pt`           | [Oriented Detection](../tasks/obb.md)         | ✅       | ✅         | ✅        | ✅     |
 
 !!! note "Two architecture paths"
 
@@ -149,7 +146,21 @@ be reproduced with `yolo val model=yolo27n.pt data=coco.yaml`.
 
 === "Semantic Segmentation (Cityscapes)"
 
-    YOLO27 semantic segmentation models are currently training — results will be added once the models are finalized.
+    Measured at a 1024 × 2048-pixel input. YOLO27-sem speeds and sizes are being measured and will be added shortly.
+    YOLO26 speeds were measured on an RTX 3090 (PyTorch); see [YOLO26](yolo26.md) for details.
+
+    | Model           | Size<br><sup>(pixels)</sup> | mIoU<sup>val</sup> | CPU ONNX<br><sup>(ms)</sup> | T4 TensorRT<br><sup>(ms)</sup> | Params<br><sup>(M)</sup> | FLOPs<br><sup>(B)</sup> |
+    | --------------- | --------------------------- | ------------------ | --------------------------- | ------------------------------ | ------------------------ | ----------------------- |
+    | YOLO26n-sem     | 1024 × 2048                 | 78.3               | —                           | —                              | 1.6                      | 23.8                    |
+    | **YOLO27n-sem** | 1024 × 2048                 | **78.8** (+0.5)    | —                           | —                              | —                        | —                       |
+    | YOLO26s-sem     | 1024 × 2048                 | 80.8               | —                           | —                              | 6.5                      | 91.0                    |
+    | **YOLO27s-sem** | 1024 × 2048                 | **81.2** (+0.4)    | —                           | —                              | —                        | —                       |
+    | YOLO26m-sem     | 1024 × 2048                 | 82.0               | —                           | —                              | 14.3                     | 305.5                   |
+    | **YOLO27m-sem** | 1024 × 2048                 | **82.4** (+0.4)    | —                           | —                              | —                        | —                       |
+    | YOLO26l-sem     | 1024 × 2048                 | 82.9               | —                           | —                              | 17.8                     | 388.2                   |
+    | **YOLO27l-sem** | 1024 × 2048                 | **83.6** (+0.7)    | —                           | —                              | —                        | —                       |
+    | YOLO26x-sem     | 1024 × 2048                 | 83.6               | —                           | —                              | 40.1                     | 866.9                   |
+    | **YOLO27x-sem** | 1024 × 2048                 | **83.8** (+0.2)    | —                           | —                              | —                        | —                       |
 
 === "Depth Estimation (NYU Depth V2)"
 
@@ -177,11 +188,38 @@ be reproduced with `yolo val model=yolo27n.pt data=coco.yaml`.
 
 === "Pose (COCO)"
 
-    YOLO27 pose estimation models are currently training — results will be added once the models are finalized.
+    Measured at a 640-pixel input. YOLO27-pose speeds and sizes are being measured and will be added shortly.
+
+    | Model            | Size<br><sup>(pixels)</sup> | mAP<sup>pose<br>50-95</sup> | mAP<sup>pose<br>50</sup> | CPU ONNX<br><sup>(ms)</sup> | T4 TensorRT<br><sup>(ms)</sup> | Params<br><sup>(M)</sup> | FLOPs<br><sup>(B)</sup> |
+    | ---------------- | --------------------------- | --------------------------- | ------------------------ | --------------------------- | ------------------------------ | ------------------------ | ----------------------- |
+    | YOLO26n-pose     | 640                         | 57.2                        | 83.3                     | 40.3 ± 0.5                  | 1.8 ± 0.0                      | 2.9                      | 7.6                     |
+    | **YOLO27n-pose** | 640                         | **58.0** (+0.8)             | **84.1**                 | —                           | —                              | —                        | —                       |
+    | YOLO26s-pose     | 640                         | 63.0                        | 86.6                     | 85.3 ± 0.9                  | 2.7 ± 0.0                      | 10.4                     | 24.1                    |
+    | **YOLO27s-pose** | 640                         | **64.3** (+1.3)             | **87.0**                 | —                           | —                              | —                        | —                       |
+    | YOLO26m-pose     | 640                         | 68.8                        | 89.6                     | 218.0 ± 1.5                 | 5.0 ± 0.1                      | 21.5                     | 73.3                    |
+    | **YOLO27m-pose** | 640                         | **69.0** (+0.2)             | **89.9**                 | —                           | —                              | —                        | —                       |
+    | YOLO26l-pose     | 640                         | 70.4                        | 90.5                     | 275.4 ± 2.4                 | 6.5 ± 0.1                      | 25.9                     | 91.7                    |
+    | **YOLO27l-pose** | 640                         | **70.7** (+0.3)             | **90.3**                 | —                           | —                              | —                        | —                       |
+    | YOLO26x-pose     | 640                         | 71.6                        | 91.6                     | 565.4 ± 3.0                 | 12.2 ± 0.2                     | 57.6                     | 202.3                   |
+    | **YOLO27x-pose** | 640                         | **72.2** (+0.6)             | **91.3**                 | —                           | —                              | —                        | —                       |
 
 === "OBB (DOTAv1)"
 
-    YOLO27 oriented detection models are currently training — results will be added once the models are finalized.
+    Measured at a 1024-pixel input on the DOTAv1 test set. YOLO27-obb speeds and sizes are being measured and will be
+    added shortly.
+
+    | Model           | Size<br><sup>(pixels)</sup> | mAP<sup>test<br>50-95</sup> | mAP<sup>test<br>50</sup> | CPU ONNX<br><sup>(ms)</sup> | T4 TensorRT<br><sup>(ms)</sup> | Params<br><sup>(M)</sup> | FLOPs<br><sup>(B)</sup> |
+    | --------------- | --------------------------- | --------------------------- | ------------------------ | --------------------------- | ------------------------------ | ------------------------ | ----------------------- |
+    | YOLO26n-obb     | 1024                        | 52.4                        | 78.9                     | 97.7 ± 0.9                  | 2.8 ± 0.0                      | 2.4                      | 14.8                    |
+    | **YOLO27n-obb** | 1024                        | **54.0** (+1.6)             | **80.3**                 | —                           | —                              | —                        | —                       |
+    | YOLO26s-obb     | 1024                        | 54.8                        | 80.9                     | 218.0 ± 1.4                 | 4.9 ± 0.1                      | 9.8                      | 56.7                    |
+    | **YOLO27s-obb** | 1024                        | **55.8** (+1.0)             | **81.6**                 | —                           | —                              | —                        | —                       |
+    | YOLO26m-obb     | 1024                        | 55.3                        | 81.0                     | 579.2 ± 3.8                 | 10.2 ± 0.3                     | 21.2                     | 184.9                   |
+    | **YOLO27m-obb** | 1024                        | **55.9** (+0.6)             | **82.6**                 | —                           | —                              | —                        | —                       |
+    | YOLO26l-obb     | 1024                        | 56.2                        | 81.6                     | 735.6 ± 3.1                 | 13.0 ± 0.2                     | 25.6                     | 232.4                   |
+    | **YOLO27l-obb** | 1024                        | **56.5** (+0.3)             | **82.7**                 | —                           | —                              | —                        | —                       |
+    | YOLO26x-obb     | 1024                        | 56.7                        | 81.7                     | 1485.7 ± 11.5               | 30.5 ± 0.9                     | 57.6                     | 520.1                   |
+    | **YOLO27x-obb** | 1024                        | **57.2** (+0.5)             | **82.7**                 | —                           | —                              | —                        | —                       |
 
 ---
 
