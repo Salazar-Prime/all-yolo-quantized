@@ -68,9 +68,8 @@ YOLO26 is compared using its end-to-end (one-to-one head) numbers, matching YOLO
 - **Query-based detection without NMS**
   The larger models replace dense prediction with a transformer decoder that refines a fixed set of object queries
   and directly outputs the final detections — no non-maximum suppression post-processing needed. YOLO27m and YOLO27l
-  pair this decoder with the proven YOLO26-style convolutional backbone, while YOLO27x adds an UltraViT backbone that
-  uses self-attention in its deepest stage to capture global context, plus a hybrid encoder that fuses features
-  across scales.
+  pair this decoder with the proven YOLO26-style convolutional backbone, while YOLO27x keeps the same FPN/PAN neck
+  and swaps in an UltraViT backbone that uses self-attention in its deepest stage to capture global context.
 
 - **One simple interface**
   Both architectures are used through the same `YOLO` class. The right training, validation, prediction, and export
