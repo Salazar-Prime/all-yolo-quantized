@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import types
 from pathlib import Path
 
@@ -331,7 +332,9 @@ def onnx2engine(
         enabled with builder flags. On TensorRT 11 these were removed in favor of strongly-typed networks, so reduced
         precision is baked into the ONNX with NVIDIA ModelOpt before building (FP16 AutoCast, INT8 explicit Q/DQ) by
         `modelopt_quantize_onnx`. The TensorRT 7-10 path keeps the Sigmoid layers at higher precision to preserve
-        confidence-score calibration (see #24668). Metadata is serialized and written to the engine file if provided.
+        confidence-score calibration (see #24668). If an implicit-INT8 build fails with a node that has no
+        implementable tactic, that node's layers are pinned to FP32 and the build is retried. Metadata is serialized
+        and written to the engine file if provided.
     """
     # Force re-install TensorRT on CUDA 13 ARM devices to 10.15.x versions for RT-DETR exports
     # https://github.com/ultralytics/ultralytics/issues/22873
@@ -349,9 +352,24 @@ def onnx2engine(
     LOGGER.info(f"\n{prefix} starting export with TensorRT {trt.__version__}...")
     output_file = output_file or Path(onnx_file).with_suffix(".engine")
 
-    logger = trt.Logger(trt.Logger.INFO)
-    if verbose:
-        logger.min_severity = trt.Logger.Severity.VERBOSE
+    class _BuildLogger(trt.ILogger):
+        """TensorRT logger with the default formatting that also records errors for post-build inspection."""
+
+        def __init__(self, min_severity):
+            """Initialize with the minimum severity to print; errors are always recorded."""
+            super().__init__()
+            self.min_severity = min_severity
+            self.errors = []
+
+        def log(self, severity, msg):
+            """Record errors and print messages at or above the minimum severity, mirroring trt.Logger's format."""
+            if severity <= trt.ILogger.Severity.ERROR:
+                self.errors.append(msg)
+            if severity <= self.min_severity:
+                letter = {0: "!", 1: "E", 2: "W", 3: "I", 4: "V"}.get(int(severity), "?")
+                print(f"[{time.strftime('%m/%d/%Y-%H:%M:%S')}] [TRT] [{letter}] {msg}")
+
+    logger = _BuildLogger(trt.ILogger.Severity.VERBOSE if verbose else trt.ILogger.Severity.INFO)
 
     # Engine builder
     builder = trt.Builder(logger)
@@ -557,11 +575,34 @@ def onnx2engine(
             )
 
     # Write file
-    if hasattr(builder, "build_serialized_network"):
-        engine = builder.build_serialized_network(network, config)
-    else:
+    def _build():
+        """Build and serialize the engine, or return None on failure."""
+        if hasattr(builder, "build_serialized_network"):
+            return builder.build_serialized_network(network, config)
         engine = builder.build_engine(network, config)
-        engine = None if engine is None else engine.serialize()
+        return None if engine is None else engine.serialize()
+
+    # Implicit INT8 can leave a fused node without any implementable tactic ("Could not find any implementation for
+    # node X", seen on a DEIM neck Conv+SiLU with TensorRT 10.11); pin the reported node's layers to FP32 and retry.
+    layer_by_name = {network.get_layer(i).name: network.get_layer(i) for i in range(network.num_layers)}
+    engine, pinned = None, set()
+    for _ in range(4 if use_int8 and not is_trt11 else 1):
+        logger.errors.clear()
+        engine = _build()
+        if engine is not None:
+            break
+        err = next((m for m in logger.errors if "Could not find any implementation for node" in m), "")
+        names = {n for n in re.findall(r"/[\w./]+", err) if n in layer_by_name} - pinned
+        if not names:
+            break
+        for name in names:
+            layer = layer_by_name[name]
+            layer.precision = trt.float32
+            for j in range(layer.num_outputs):
+                layer.set_output_type(j, trt.float32)
+        pinned |= names
+        _set_precision_constraint_flag(config, trt, prefix)
+        LOGGER.info(f"{prefix} INT8 build fallback: pinned {sorted(names)} to FP32, rebuilding engine...")
     if engine is None:
         raise RuntimeError("TensorRT engine build failed, check logs for errors")
     with open(output_file, "wb") as t:
