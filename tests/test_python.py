@@ -1039,7 +1039,7 @@ def test_workflow(isolated_model):
     model.export(format="torchscript")  # WARNING: Windows slow CI export bug
 
 
-@pytest.mark.skipif(not TORCH_1_11, reason="yolo27 DEIM models use RT-DETR components that require torch>=1.11")
+@pytest.mark.skipif(not TORCH_2_0, reason="UltraViT uses scaled_dot_product_attention (torch>=2.0)")
 @pytest.mark.skipif(IS_JETSON or IS_RASPBERRYPI, reason="Edge devices not intended for training")
 def test_yolodetr_train(tmp_path, cfg="yolo27x.yaml"):
     """Test DEIM-routed YOLO train, val, and predict on the UltraViT backbone variant."""

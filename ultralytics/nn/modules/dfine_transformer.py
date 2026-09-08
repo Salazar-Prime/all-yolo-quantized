@@ -479,7 +479,7 @@ class DEIMSwiGLUFFN(nn.Module):
             The projections run in float32 on CUDA and the result is cast back, keeping the gate product from
             overflowing under autocast.
         """
-        with torch.autocast(device_type=x.device.type, dtype=torch.float32, enabled=x.is_cuda):
+        with torch.autocast(device_type=x.device.type, enabled=False):
             x1, x2 = self.w12(x.float()).chunk(2, dim=-1)
             return self.w3(F.silu(x1) * x2).to(x.dtype)
 
@@ -602,8 +602,8 @@ class DeimTransformerDecoderLayer(nn.Module):
             final norm, which keeps the layer finite under autocast.
         """
         q = k = self.with_pos_embed(target, query_pos_embed)
-        with torch.autocast(device_type=target.device.type, dtype=torch.float32, enabled=target.is_cuda):
-            target2, _ = self.self_attn(q, k, value=target, attn_mask=attn_mask)
+        with torch.autocast(device_type=target.device.type, enabled=False):
+            target2, _ = self.self_attn(q.float(), k.float(), value=target.float(), attn_mask=attn_mask)
         target2 = target2.to(target.dtype)
         target = self.norm1(target + self.dropout1(target2))
 
