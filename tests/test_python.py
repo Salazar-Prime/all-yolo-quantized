@@ -23,6 +23,7 @@ from ultralytics import RTDETR, YOLO
 from ultralytics.cfg import get_cfg
 from ultralytics.data.build import build_dataloader, load_inference_source
 from ultralytics.data.utils import check_cls_dataset, check_det_dataset, get_split_fraction
+from ultralytics.nn.tasks import guess_model_family
 from ultralytics.utils import (
     ARM64,
     ASSETS,
@@ -1024,7 +1025,7 @@ def test_all_model_yamls():
         if "rtdetr" in m.name:
             if TORCH_1_11:
                 _ = RTDETR(m.name)(SOURCE, imgsz=160)
-        else:
+        elif TORCH_1_11 or guess_model_family(m) != "yolodetr":
             YOLO(m.name)
 
 
