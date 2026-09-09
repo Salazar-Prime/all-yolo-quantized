@@ -111,111 +111,94 @@ export support:
 
 ## Performance Metrics
 
-Detection accuracy is reported on the COCO validation set with latency on an NVIDIA T4 (TensorRT); the segmentation
-and classification tables list model size and inference speed on CPU (ONNX) and GPU (TensorRT). Accuracy numbers can
-be reproduced with `yolo val model=yolo27n.pt data=coco.yaml`.
+Detection accuracy is reported on the COCO validation set. Inference speed is measured on an NVIDIA RTX PRO 6000
+(TensorRT 11, FP16) for GPU and an AMD EPYC 9655 (ONNX Runtime, FP32) for CPU. Accuracy numbers can be reproduced
+with `yolo val model=yolo27n.pt data=coco.yaml`.
 
 === "Detection (COCO)"
 
     YOLO27x is additionally reported at an 800-pixel input.
 
-    | Model   | Size<br><sup>(pixels)</sup> | mAP<sup>val<br>50-95</sup> | CPU ONNX<br><sup>(ms)</sup> | T4 TensorRT<br><sup>(ms)</sup> | Params<br><sup>(M)</sup> | FLOPs<br><sup>(B)</sup> |
-    | ------- | --------------------------- | -------------------------- | --------------------------- | ------------------------------ | ------------------------ | ----------------------- |
-    | YOLO27n | 640                         | 41.6                       | —                           | 1.8                            | 3.0                      | 7.2                     |
-    | YOLO27s | 640                         | 49.2                       | —                           | 2.7                            | 11.8                     | 28.2                    |
-    | YOLO27m | 640                         | 55.7                       | 155.9&nbsp;±&nbsp;6.5       | 4.7                            | 22.8                     | 65.0                    |
-    | YOLO27l | 640                         | 57.7                       | 258.7&nbsp;±&nbsp;11.6      | 6.5                            | 30.4                     | 85.4                    |
-    | YOLO27x | 640                         | 60.4                       | 407.6&nbsp;±&nbsp;24.5      | 11.4                           | 72.3                     | 165.3                   |
-    | YOLO27x | 800                         | **61.2**                   | 624.8&nbsp;±&nbsp;59.7      | 16.8                           | 72.3                     | 254.8                   |
+    | Model   | Size<br><sup>(pixels)</sup> | mAP<sup>val<br>50-95</sup> | CPU ONNX<br><sup>(ms)</sup> | TensorRT<br><sup>(ms)</sup> | Params<br><sup>(M)</sup> | FLOPs<br><sup>(B)</sup> |
+    | ------- | --------------------------- | -------------------------- | --------------------------- | -------------------------- | ------------------------ | ----------------------- |
+    | YOLO27n | 640                         | 41.6                       | 16.1                        | 0.62                       | 3.1                      | 8.2                     |
+    | YOLO27s | 640                         | 49.2                       | 33.2                        | 0.79                       | 12.4                     | 31.4                    |
+    | YOLO27m | 640                         | 55.7                       | 67.2                        | 1.39                       | 22.8                     | 65.5                    |
+    | YOLO27l | 640                         | 57.7                       | 93.8                        | 2.00                       | 30.4                     | 86.1                    |
+    | YOLO27x | 640                         | 60.4                       | 149.6                       | 2.32                       | 72.3                     | 166.2                   |
+    | YOLO27x | 800                         | **61.2**                   | 213.2                       | 2.90                       | 72.3                     | 254.8                   |
 
 === "Segmentation (COCO)"
 
     Measured at a 640-pixel input.
 
     | Model       | Size<br><sup>(pixels)</sup> | CPU ONNX<br><sup>(ms)</sup> | TensorRT<br><sup>(ms)</sup> | Params<br><sup>(M)</sup> | FLOPs<br><sup>(B)</sup> |
-    | ----------- | --------------------------- | --------------------------- | --------------------------- | ------------------------ | ----------------------- |
-    | YOLO27n-seg | 640                         | 63.1&nbsp;±&nbsp;3.1        | **2.092 ± 0.051**           | 3.0                      | 11.1                    |
-    | YOLO27s-seg | 640                         | 119.0&nbsp;±&nbsp;5.0       | **3.562 ± 0.046**           | 11.6                     | 42.9                    |
-    | YOLO27m-seg | 640                         | 280.7&nbsp;±&nbsp;15.1      | **7.409 ± 0.193**           | 25.4                     | 139.4                   |
-    | YOLO27l-seg | 640                         | 343.0&nbsp;±&nbsp;7.7       | **9.198 ± 0.194**           | 30.0                     | 161.0                   |
-    | YOLO27x-seg | 640                         | 672.7&nbsp;±&nbsp;54.8      | **18.123 ± 0.545**          | 67.5                     | 361.3                   |
+    | ----------- | --------------------------- | --------------------------- | -------------------------- | ------------------------ | ----------------------- |
+    | YOLO27n-seg | 640                         | 22.0                        | 0.73                       | 3.4                      | 12.7                    |
+    | YOLO27s-seg | 640                         | 45.8                        | 0.96                       | 13.0                     | 47.9                    |
+    | YOLO27m-seg | 640                         | 109.3                       | 1.46                       | 29.5                     | 156.5                   |
+    | YOLO27l-seg | 640                         | 125.3                       | 1.91                       | 34.2                     | 178.4                   |
+    | YOLO27x-seg | 640                         | 248.3                       | 2.86                       | 76.7                     | 399.0                   |
 
 === "Semantic Segmentation (Cityscapes)"
 
-    Measured at a 1024 × 2048-pixel input. YOLO27-sem speeds and sizes are being measured and will be added shortly.
-    YOLO26 speeds were measured on an RTX 3090 (PyTorch); see [YOLO26](yolo26.md) for details.
+    Measured at a 1024 × 2048-pixel input.
 
-    | Model           | Size<br><sup>(pixels)</sup> | mIoU<sup>val</sup> | CPU ONNX<br><sup>(ms)</sup> | T4 TensorRT<br><sup>(ms)</sup> | Params<br><sup>(M)</sup> | FLOPs<br><sup>(B)</sup> |
-    | --------------- | --------------------------- | ------------------ | --------------------------- | ------------------------------ | ------------------------ | ----------------------- |
-    | YOLO26n-sem     | 1024 × 2048                 | 78.3               | —                           | —                              | 1.6                      | 23.8                    |
-    | **YOLO27n-sem** | 1024 × 2048                 | **78.8** (+0.5)    | —                           | —                              | —                        | —                       |
-    | YOLO26s-sem     | 1024 × 2048                 | 80.8               | —                           | —                              | 6.5                      | 91.0                    |
-    | **YOLO27s-sem** | 1024 × 2048                 | **81.2** (+0.4)    | —                           | —                              | —                        | —                       |
-    | YOLO26m-sem     | 1024 × 2048                 | 82.0               | —                           | —                              | 14.3                     | 305.5                   |
-    | **YOLO27m-sem** | 1024 × 2048                 | **82.4** (+0.4)    | —                           | —                              | —                        | —                       |
-    | YOLO26l-sem     | 1024 × 2048                 | 82.9               | —                           | —                              | 17.8                     | 388.2                   |
-    | **YOLO27l-sem** | 1024 × 2048                 | **83.6** (+0.7)    | —                           | —                              | —                        | —                       |
-    | YOLO26x-sem     | 1024 × 2048                 | 83.6               | —                           | —                              | 40.1                     | 866.9                   |
-    | **YOLO27x-sem** | 1024 × 2048                 | **83.8** (+0.2)    | —                           | —                              | —                        | —                       |
+    | Model       | Size<br><sup>(pixels)</sup> | mIoU<sup>val</sup> | CPU ONNX<br><sup>(ms)</sup> | TensorRT<br><sup>(ms)</sup> | Params<br><sup>(M)</sup> | FLOPs<br><sup>(B)</sup> |
+    | ----------- | --------------------------- | ------------------ | --------------------------- | -------------------------- | ------------------------ | ----------------------- |
+    | YOLO27n-sem | 1024 × 2048                 | 78.8               | 95.6                        | 0.89                       | 2.0                      | 34.6                    |
+    | YOLO27s-sem | 1024 × 2048                 | 81.2               | 169.6                       | 1.43                       | 7.8                      | 132.7                   |
+    | YOLO27m-sem | 1024 × 2048                 | 82.4               | 336.9                       | 2.71                       | 16.1                     | 387.7                   |
+    | YOLO27l-sem | 1024 × 2048                 | 83.6               | 418.0                       | 3.46                       | 20.0                     | 488.7                   |
+    | YOLO27x-sem | 1024 × 2048                 | 83.8               | 787.1                       | 6.43                       | 44.8                     | 1090.5                  |
 
 === "Depth Estimation (NYU Depth V2)"
 
-    with latency on an NVIDIA T4 (TensorRT) and CPU (ONNX).
+    Measured at a 768-pixel input with latency on an NVIDIA RTX PRO 6000 (TensorRT) and AMD EPYC 9655 CPU (ONNX).
 
-    | Model           | Params  | GFLOPs | CPU ONNX  | T4 TensorRT   | NYU* δ1 | KITTI-580* δ1 | bench mean |
-    | --------------- | ------- | ------ | --------- | ------------  | ------- | ------------- | ---------- |
-    | YOLO27n-depth   | 5.42 M  | 49.1   | 126.7 ms  | **2.976 ms**  | 0.8314  | 0.8256        | 0.7238     |
-    | YOLO27s-depth   | 13.04 M | 76.8   | 198.1 ms  | **4.534 ms**  | 0.8682  | 0.7835        | 0.7454     |
-    | YOLO27m-depth   | 23.39 M | 143.1  | 292.4 ms  | **7.170 ms**  | 0.8652  | 0.7746        | 0.7476     |
-    | YOLO27l-depth   | 28.06 M | 174.3  | 380.2 ms  | **9.243 ms**  | 0.8742  | 0.7862        | 0.7616     |
-    | YOLO27x-depth   | 59.33 M | 340.7  | 627.9 ms  | **17.001 ms** | 0.8711  | 0.8041        | 0.7527     |
+    | Model         | Params | GFLOPs | CPU ONNX | TensorRT | NYU* δ1 | KITTI-580* δ1 | bench mean |
+    | ------------- | ------ | ------ | -------- | -------- | ------- | ------------- | ---------- |
+    | YOLO27n-depth | 5.43 M | 49.6   | 47.2 ms  | 0.79 ms  | 0.8314  | 0.8256        | 0.7238     |
+    | YOLO27s-depth | 13.06 M | 77.8  | 72.1 ms  | 0.97 ms  | 0.8682  | 0.7835        | 0.7454     |
+    | YOLO27m-depth | 23.42 M | 144.4 | 120.2 ms | 1.34 ms  | 0.8652  | 0.7746        | 0.7476     |
+    | YOLO27l-depth | 28.09 M | 176.0 | 147.0 ms | 1.83 ms  | 0.8742  | 0.7862        | 0.7616     |
+    | YOLO27x-depth | 59.38 M | 343.3 | 253.7 ms | 2.65 ms  | 0.8711  | 0.8041        | 0.7527     |
 
 === "Classification (ImageNet)"
 
     Measured at a 224-pixel input.
 
     | Model       | Size<br><sup>(pixels)</sup> | CPU ONNX<br><sup>(ms)</sup> | TensorRT<br><sup>(ms)</sup> | Params<br><sup>(M)</sup> | FLOPs<br><sup>(B)</sup> |
-    | ----------- | --------------------------- | --------------------------- | --------------------------- | ------------------------ | ----------------------- |
-    | YOLO27n-cls | 224                         | 4.2&nbsp;±&nbsp;0.6         | **1.131 ± 0.046**           | 2.9                      | 0.6                     |
-    | YOLO27s-cls | 224                         | 7.3&nbsp;±&nbsp;0.7         | **1.412 ± 0.025**           | 6.9                      | 1.9                     |
-    | YOLO27m-cls | 224                         | 16.8&nbsp;±&nbsp;1.1        | **1.905 ± 0.053**           | 12.4                     | 6.2                     |
-    | YOLO27l-cls | 224                         | 24.8&nbsp;±&nbsp;1.6        | **1.935 ± 0.075**           | 15.5                     | 8.4                     |
-    | YOLO27x-cls | 224                         | 44.1&nbsp;±&nbsp;3.4        | **1.951 ± 0.038**           | 32.8                     | 18.6                    |
+    | ----------- | --------------------------- | --------------------------- | -------------------------- | ------------------------ | ----------------------- |
+    | YOLO27n-cls | 224                         | 1.9                         | 0.28                       | 2.9                      | 0.5                     |
+    | YOLO27s-cls | 224                         | 3.1                         | 0.31                       | 6.9                      | 1.8                     |
+    | YOLO27m-cls | 224                         | 6.0                         | 0.39                       | 12.4                     | 6.1                     |
+    | YOLO27l-cls | 224                         | 8.9                         | 0.59                       | 15.5                     | 8.3                     |
+    | YOLO27x-cls | 224                         | 16.7                        | 0.69                       | 32.8                     | 18.6                    |
 
 === "Pose (COCO)"
 
-    Measured at a 640-pixel input. YOLO27-pose speeds and sizes are being measured and will be added shortly.
+    Measured at a 640-pixel input.
 
-    | Model            | Size<br><sup>(pixels)</sup> | mAP<sup>pose<br>50-95</sup> | mAP<sup>pose<br>50</sup> | CPU ONNX<br><sup>(ms)</sup> | T4 TensorRT<br><sup>(ms)</sup> | Params<br><sup>(M)</sup> | FLOPs<br><sup>(B)</sup> |
-    | ---------------- | --------------------------- | --------------------------- | ------------------------ | --------------------------- | ------------------------------ | ------------------------ | ----------------------- |
-    | YOLO26n-pose     | 640                         | 57.2                        | 83.3                     | 40.3&nbsp;±&nbsp;0.5        | 1.8 ± 0.0                      | 2.9                      | 7.6                     |
-    | **YOLO27n-pose** | 640                         | **58.0** (+0.8)             | **84.1**                 | —                           | —                              | —                        | —                       |
-    | YOLO26s-pose     | 640                         | 63.0                        | 86.6                     | 85.3&nbsp;±&nbsp;0.9        | 2.7 ± 0.0                      | 10.4                     | 24.1                    |
-    | **YOLO27s-pose** | 640                         | **64.3** (+1.3)             | **87.0**                 | —                           | —                              | —                        | —                       |
-    | YOLO26m-pose     | 640                         | 68.8                        | 89.6                     | 218.0&nbsp;±&nbsp;1.5       | 5.0 ± 0.1                      | 21.5                     | 73.3                    |
-    | **YOLO27m-pose** | 640                         | **69.0** (+0.2)             | **89.9**                 | —                           | —                              | —                        | —                       |
-    | YOLO26l-pose     | 640                         | 70.4                        | 90.5                     | 275.4&nbsp;±&nbsp;2.4       | 6.5 ± 0.1                      | 25.9                     | 91.7                    |
-    | **YOLO27l-pose** | 640                         | **70.7** (+0.3)             | **90.3**                 | —                           | —                              | —                        | —                       |
-    | YOLO26x-pose     | 640                         | 71.6                        | 91.6                     | 565.4&nbsp;±&nbsp;3.0       | 12.2 ± 0.2                     | 57.6                     | 202.3                   |
-    | **YOLO27x-pose** | 640                         | **72.2** (+0.6)             | **91.3**                 | —                           | —                              | —                        | —                       |
+    | Model        | Size<br><sup>(pixels)</sup> | mAP<sup>pose<br>50-95</sup> | mAP<sup>pose<br>50</sup> | CPU ONNX<br><sup>(ms)</sup> | TensorRT<br><sup>(ms)</sup> | Params<br><sup>(M)</sup> | FLOPs<br><sup>(B)</sup> |
+    | ------------ | --------------------------- | --------------------------- | ------------------------ | --------------------------- | -------------------------- | ------------------------ | ----------------------- |
+    | YOLO27n-pose | 640                         | **58.0**                    | **84.1**                 | 19.6                        | 0.67                       | 3.7                      | 12.1                    |
+    | YOLO27s-pose | 640                         | **64.3**                    | **87.0**                 | 36.6                        | 0.80                       | 12.6                     | 37.3                    |
+    | YOLO27m-pose | 640                         | **69.0**                    | **89.9**                 | 76.6                        | 1.29                       | 25.4                     | 102.6                   |
+    | YOLO27l-pose | 640                         | **70.7**                    | **90.3**                 | 95.2                        | 1.74                       | 30.1                     | 124.5                   |
+    | YOLO27x-pose | 640                         | **72.2**                    | **91.3**                 | 181.1                       | 2.45                       | 67.6                     | 278.8                   |
 
 === "OBB (DOTAv1)"
 
-    Measured at a 1024-pixel input on the DOTAv1 test set. YOLO27-obb speeds and sizes are being measured and will be
-    added shortly.
+    Measured at a 1024-pixel input on the DOTAv1 test set.
 
-    | Model           | Size<br><sup>(pixels)</sup> | mAP<sup>test<br>50-95</sup> | mAP<sup>test<br>50</sup> | CPU ONNX<br><sup>(ms)</sup> | T4 TensorRT<br><sup>(ms)</sup> | Params<br><sup>(M)</sup> | FLOPs<br><sup>(B)</sup> |
-    | --------------- | --------------------------- | --------------------------- | ------------------------ | --------------------------- | ------------------------------ | ------------------------ | ----------------------- |
-    | YOLO26n-obb     | 1024                        | 52.4                        | 78.9                     | 97.7&nbsp;±&nbsp;0.9        | 2.8 ± 0.0                      | 2.4                      | 14.8                    |
-    | **YOLO27n-obb** | 1024                        | **54.0** (+1.6)             | **80.3**                 | —                           | —                              | —                        | —                       |
-    | YOLO26s-obb     | 1024                        | 54.8                        | 80.9                     | 218.0&nbsp;±&nbsp;1.4       | 4.9 ± 0.1                      | 9.8                      | 56.7                    |
-    | **YOLO27s-obb** | 1024                        | **55.8** (+1.0)             | **81.6**                 | —                           | —                              | —                        | —                       |
-    | YOLO26m-obb     | 1024                        | 55.3                        | 81.0                     | 579.2&nbsp;±&nbsp;3.8       | 10.2 ± 0.3                     | 21.2                     | 184.9                   |
-    | **YOLO27m-obb** | 1024                        | **55.9** (+0.6)             | **82.6**                 | —                           | —                              | —                        | —                       |
-    | YOLO26l-obb     | 1024                        | 56.2                        | 81.6                     | 735.6&nbsp;±&nbsp;3.1       | 13.0 ± 0.2                     | 25.6                     | 232.4                   |
-    | **YOLO27l-obb** | 1024                        | **56.5** (+0.3)             | **82.7**                 | —                           | —                              | —                        | —                       |
-    | YOLO26x-obb     | 1024                        | 56.7                        | 81.7                     | 1485.7&nbsp;±&nbsp;11.5     | 30.5 ± 0.9                     | 57.6                     | 520.1                   |
-    | **YOLO27x-obb** | 1024                        | **57.2** (+0.5)             | **82.7**                 | —                           | —                              | —                        | —                       |
+    | Model       | Size<br><sup>(pixels)</sup> | mAP<sup>test<br>50-95</sup> | mAP<sup>test<br>50</sup> | CPU ONNX<br><sup>(ms)</sup> | TensorRT<br><sup>(ms)</sup> | Params<br><sup>(M)</sup> | FLOPs<br><sup>(B)</sup> |
+    | ----------- | --------------------------- | --------------------------- | ------------------------ | --------------------------- | -------------------------- | ------------------------ | ----------------------- |
+    | YOLO27n-obb | 1024                        | **54.0**                    | **80.3**                 | 42.6                        | 0.83                       | 3.3                      | 22.9                    |
+    | YOLO27s-obb | 1024                        | **55.8**                    | **81.6**                 | 88.2                        | 1.30                       | 11.9                     | 88.3                    |
+    | YOLO27m-obb | 1024                        | **55.9**                    | **82.6**                 | 188.0                       | 1.92                       | 25.4                     | 263.7                   |
+    | YOLO27l-obb | 1024                        | **56.5**                    | **82.7**                 | 227.9                       | 2.48                       | 30.0                     | 320.3                   |
+    | YOLO27x-obb | 1024                        | **57.2**                    | **82.7**                 | 455.8                       | 4.33                       | 74.5                     | 715.9                   |
 
 ---
 
