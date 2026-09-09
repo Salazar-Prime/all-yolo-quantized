@@ -2331,8 +2331,8 @@ def parse_model(d, ch, verbose=True):
             c2 = ch[f]
 
         m_ = torch.nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
-        if m is Detect:
-            m_.aux_fg_on = aux_fg  # architecture flag; DetectionTrainer attaches the branch before weight loading
+        if issubclass(m, Detect):  # Detect and subclasses (OBB, Segment, Pose, ...)
+            m_.aux_fg_on = aux_fg  # architecture flag; the trainer attaches the branch before weight loading
         if m is SPPF and len(args) <= 3:  # Legacy YAML rows predate the unactivated YOLO26 SPPF.
             for block in m_ if n > 1 else [m_]:
                 block.cv1.act = Conv.default_act

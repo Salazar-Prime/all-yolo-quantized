@@ -1150,6 +1150,7 @@ class v8OBBLoss(v8DetectionLoss):
         )
 
         target_scores_sum = max(target_scores.sum(), 1)
+        self._cache = {"fg_mask": fg_mask}  # branch assignment, read by E2ELoss's aux-fg target (yolo27)
 
         # Cls loss
         # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
