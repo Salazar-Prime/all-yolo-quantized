@@ -3,7 +3,7 @@
 # Ultralytics YOLO27m object detection model with P3/8 - P5/32 outputs
 # Model docs: https://docs.ultralytics.com/models/yolo27
 # Task docs: https://docs.ultralytics.com/tasks/detect
-# YOLO26-style CSP backbone and FPN/PAN neck with a 2-layer DeimDecoder head.
+# YOLO26-style CSP backbone and FPN/PAN neck with a 2-layer DEIMDecoder head.
 
 # Parameters
 nc: 80 # number of classes

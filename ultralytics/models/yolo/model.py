@@ -37,7 +37,7 @@ class YOLO(Model):
     This class provides a unified interface for YOLO models, automatically switching to specialized model types
     (YOLOWorld, YOLOE or RTDETR) based on the model filename. It supports various computer vision tasks including object
     detection, instance segmentation, semantic segmentation, depth estimation, classification, pose estimation, and
-    oriented bounding box detection. DEIM-decoder detection models (e.g. yolo27 m/l/x with a DeimDecoder head) keep this
+    oriented bounding box detection. DEIM-decoder detection models (e.g. yolo27 m/l/x with a DEIMDecoder head) keep this
     facade but route the detect task to the RT-DETR pipeline (DEIMTrainer/RTDETRValidator/RTDETRPredictor) through ``task_map``.
 
     Attributes:
@@ -99,7 +99,7 @@ class YOLO(Model):
             if not head and isinstance(self.model, (str, Path)):  # an exported model keeps its head name in metadata
                 head = BaseBackend.read_metadata(self.model).get("head", "")
             if head:  # the loaded head is authoritative and overrides the name-based guess made before load
-                self._deim = head == "DeimDecoder"
+                self._deim = head.lower() == "deimdecoder"
             if "RTDETR" in head:  # RT-DETR head
                 from ultralytics import RTDETR
 

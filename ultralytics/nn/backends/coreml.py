@@ -37,7 +37,9 @@ class CoreMLBackend(BaseBackend):
         # Exception: RT-DETR-family decoders lose FP16 accuracy and run slower on the Neural Engine alone.
         meta = self.read_metadata(weight)
         default_unit = (
-            ct.ComputeUnit.ALL if meta.get("head") in {"RTDETRDecoder", "DeimDecoder"} else ct.ComputeUnit.CPU_AND_NE
+            ct.ComputeUnit.ALL
+            if meta.get("head", "").lower() in {"rtdetrdecoder", "deimdecoder"}
+            else ct.ComputeUnit.CPU_AND_NE
         )
         try:
             self.model = ct.models.MLModel(weight, compute_units=default_unit)
