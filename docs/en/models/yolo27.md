@@ -12,22 +12,10 @@ keywords: YOLO27, Ultralytics YOLO, object detection, NMS-free, end-to-end detec
 complementary designs: a streamlined CNN architecture for the compact N and S models, and a query-based, NMS-free
 architecture for the larger M and L models. Both designs are end-to-end and deploy through the same interface.
 
-Across its four detection scales, YOLO27 reaches **41.6-60.4 mAP on COCO** at **1.8-11.4 ms latency on an NVIDIA
-T4** — and up to **61.2 mAP** with YOLO27l at a larger 800-pixel input. YOLO27l is the **first Ultralytics model to
-surpass 60 mAP on COCO**, while the compact YOLO27n/s improve on YOLO26n/s accuracy at essentially the same speed.
-
-### YOLO27 vs YOLO26
-
-YOLO26 is compared using its end-to-end (one-to-one head) numbers, matching YOLO27's NMS-free evaluation.
-
-| Scale | YOLO26 mAP<sup>val<br>50-95 (e2e)</sup> | YOLO27 mAP<sup>val<br>50-95</sup> | Δ mAP    | YOLO26 T4 (ms) | YOLO27 T4 (ms) |
-| ----- | --------------------------------------- | --------------------------------- | -------- | -------------- | -------------- |
-| n     | 40.1                                    | 41.6                              | +1.5     | 1.7            | 1.8            |
-| s     | 47.8                                    | 49.2                              | +1.4     | 2.5            | 2.7            |
-| m     | 52.5                                    | 55.7                              | +3.2     | 4.7            | 4.7            |
-| l †   | 56.9                                    | 60.4                              | **+3.5** | 11.8           | 11.4           |
-
-<sup>†</sup> YOLO27l is the former X-scale model, compared here against YOLO26x as the largest YOLO26 scale.
+Across its four detection scales, YOLO27 reaches **41.6-60.4 mAP on COCO** at **0.62-2.32 ms latency on an NVIDIA
+RTX PRO 6000** — and up to **61.2 mAP** with YOLO27l at a larger 800-pixel input. YOLO27l is the **first Ultralytics
+model to surpass 60 mAP on COCO**, while the compact YOLO27n/s improve on YOLO26n/s accuracy at essentially the same
+speed.
 
 !!! example "Quickstart"
 
@@ -81,7 +69,7 @@ YOLO26 is compared using its end-to-end (one-to-one head) numbers, matching YOLO
 
 - **YOLO27n / YOLO27s** — edge devices, drones, and real-time video: the fastest models in the family, with improved
   small-object detection from the dual-scale design.
-- **YOLO27m** — the accuracy-speed sweet spot on GPUs: improves on YOLO26m by 3.2 mAP at the same T4 latency,
+- **YOLO27m** — the accuracy-speed sweet spot on GPUs: improves on YOLO26m by 3.2 mAP at the same latency,
   making it the default choice for production GPU deployment.
 - **YOLO27l** — accuracy-critical applications: the first Ultralytics model above 60 mAP on COCO, reaching 61.2 mAP
   at a larger input size while staying real-time on GPU.
@@ -244,9 +232,9 @@ of detection-head computation, and the training improvements above keep the accu
 
 ### What makes the YOLO27l result notable?
 
-YOLO27l is the first Ultralytics model to surpass 60 mAP on COCO, reaching 60.4 mAP at a 640-pixel input (11.4 ms on
-an NVIDIA T4) and 61.2 mAP at an 800-pixel input (16.8 ms). It combines the UltraViT backbone, multi-scale feature
-fusion, and a query-based detector that produces final detections directly, without NMS.
+YOLO27l is the first Ultralytics model to surpass 60 mAP on COCO, reaching 60.4 mAP at a 640-pixel input (2.3 ms on
+an NVIDIA RTX PRO 6000) and 61.2 mAP at an 800-pixel input (2.9 ms). It combines the UltraViT backbone, multi-scale
+feature fusion, and a query-based detector that produces final detections directly, without NMS.
 
 ### How do I get started with YOLO27?
 
