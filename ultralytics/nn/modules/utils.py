@@ -9,8 +9,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ultralytics.utils.ops import xyxy2xywh
-
 __all__ = "inverse_sigmoid", "multi_scale_deformable_attn_pytorch"
 
 
@@ -280,9 +278,9 @@ def distance2bbox(points, distance, reg_scale):
     x2 = points[..., 0] + (0.5 * reg_scale + distance[..., 2]) * (points[..., 2] / reg_scale)
     y2 = points[..., 1] + (0.5 * reg_scale + distance[..., 3]) * (points[..., 3] / reg_scale)
 
-    bboxes = torch.stack([x1, y1, x2, y2], -1)
-
-    return xyxy2xywh(bboxes)
+    # Stack straight to xywh: ops.xyxy2xywh allocates with empty_like and assigns by index, which traces to an
+    # in-place copy CoreML cannot convert
+    return torch.stack([(x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1], -1)
 
 
 def bbox2distance(points, bbox, reg_max, reg_scale, up, eps=0.1):
