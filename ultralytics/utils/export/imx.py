@@ -12,7 +12,7 @@ from shutil import which
 import numpy as np
 import torch
 
-from ultralytics.nn.modules import Detect, Pose, Segment
+from ultralytics.nn.modules import Attention, Detect, Pose, Segment
 from ultralytics.utils import IS_DEBIAN_BOOKWORM, IS_DEBIAN_TRIXIE, IS_RASPBERRYPI, IS_UBUNTU, LOGGER, WINDOWS
 from ultralytics.utils.checks import check_apt_requirements, check_requirements
 from ultralytics.utils.patches import onnx_export_patch
@@ -84,6 +84,9 @@ class FXModel(torch.nn.Module):
         # Explicitly set `model` since `copy_attr` somehow does not copy it.
         self.model = model.model
         self.imgsz = imgsz
+        for m in self.model.modules():
+            if isinstance(m, Attention):
+                m._get_attention = types.MethodType(_get_attention, m)
 
     def forward(self, x):
         """Forward pass through the model.
@@ -117,6 +120,11 @@ class FXModel(torch.nn.Module):
             x = m(x)  # run
             y.append(x)  # save output
         return x
+
+
+def _get_attention(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
+    """Compute attention for IMX tracing without autocast or dtype conversions."""
+    return ((q * self.scale).transpose(-2, -1) @ k).softmax(dim=-1)
 
 
 def _inference(self, x: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:

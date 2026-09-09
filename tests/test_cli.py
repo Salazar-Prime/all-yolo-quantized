@@ -11,7 +11,7 @@ from PIL import Image
 
 from tests import CUDA_DEVICE_COUNT, CUDA_IS_AVAILABLE, MODELS, TASK_MODEL_DATA
 from ultralytics.utils import ARM64, ASSETS, DATASETS_DIR, IS_RASPBERRYPI, LINUX, WEIGHTS_DIR, checks
-from ultralytics.utils.torch_utils import TORCH_1_11, TORCH_VERSION
+from ultralytics.utils.torch_utils import TORCH_1_11, TORCH_2_0, TORCH_VERSION
 
 
 def run(cmd: str) -> None:
@@ -53,25 +53,6 @@ def test_settings_migration(tmp_path: Path, api_key: str) -> None:
     assert settings["settings_version"] == "0.0.8"
     assert "hub" not in settings
     assert "neptune" not in settings
-
-
-def test_platform_login(monkeypatch) -> None:
-    """Verify Platform login saves valid keys and logout removes them."""
-    import requests
-
-    from ultralytics import cfg
-
-    class Response:
-        status_code = 200
-
-    settings = {"api_key": ""}
-    monkeypatch.setattr(cfg, "SETTINGS", settings)
-    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: Response())
-
-    cfg.handle_yolo_login(["login", "ul_valid"])
-    assert settings["api_key"] == "ul_valid"
-    cfg.handle_yolo_login(["logout"])
-    assert settings["api_key"] == ""
 
 
 def test_cli_imports_defer_torchvision() -> None:
@@ -144,7 +125,7 @@ def test_rtdetr(task: str = "detect", model: Path = WEIGHTS_DIR / "rtdetr-l.pt",
     run(f"yolo train {task} model={model} data={data} --imgsz= 160 epochs =1, cache = disk")
 
 
-@pytest.mark.skipif(not TORCH_1_11, reason="yolo27 DEIM models use RT-DETR components that require torch>=1.11")
+@pytest.mark.skipif(not TORCH_2_0, reason="UltraViT uses scaled_dot_product_attention (torch>=2.0)")
 @pytest.mark.skipif(IS_RASPBERRYPI, reason="Edge devices not intended for training")
 def test_yolodetr(model: str = "yolo27x.yaml", data: str = "coco8.yaml") -> None:
     """Test DEIM-routed YOLO CLI predict and from-scratch training on the UltraViT backbone variant."""

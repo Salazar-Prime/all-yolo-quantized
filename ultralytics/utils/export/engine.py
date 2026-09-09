@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import types
 from pathlib import Path
 
@@ -311,7 +312,8 @@ def onnx2engine(
         dynamic (bool, optional): Enable dynamic input shapes.
         shape (tuple[int, int, int, int], optional): Input shape (batch, channels, height, width).
         dla (int | None): DLA core to use (Jetson devices only).
-        dataset (ultralytics.data.build.InfiniteDataLoader, optional): Dataset for INT8 calibration.
+        dataset (ultralytics.data.build.InfiniteDataLoader, optional): Dataset for INT8 calibration, unused when the
+            ONNX graph already carries Q/DQ ranges.
         metadata (dict | None): Metadata to include in the engine file.
         verbose (bool, optional): Enable verbose logging.
         has_deim (bool, optional): Model has a DEIM decoder. Enables the TensorRT >=10.13 deformable-attention fusion
@@ -331,8 +333,12 @@ def onnx2engine(
         enabled with builder flags. On TensorRT 11 these were removed in favor of strongly-typed networks, so reduced
         precision is baked into the ONNX with NVIDIA ModelOpt before building (FP16 AutoCast, INT8 explicit Q/DQ) by
         `modelopt_quantize_onnx`. The TensorRT 7-10 path keeps the Sigmoid layers at higher precision to preserve
-        confidence-score calibration (see #24668). Metadata is serialized and written to the engine file if provided.
+        confidence-score calibration (see #24668). If an implicit-INT8 build fails with a node that has no
+        implementable tactic, that node's layers are pinned to FP32 and the build is retried. Metadata is serialized
+        and written to the engine file if provided.
     """
+    import onnx
+
     # Force re-install TensorRT on CUDA 13 ARM devices to 10.15.x versions for RT-DETR exports
     # https://github.com/ultralytics/ultralytics/issues/22873
     if is_jetson(jetpack=7) or is_dgx():
@@ -349,9 +355,24 @@ def onnx2engine(
     LOGGER.info(f"\n{prefix} starting export with TensorRT {trt.__version__}...")
     output_file = output_file or Path(onnx_file).with_suffix(".engine")
 
-    logger = trt.Logger(trt.Logger.INFO)
-    if verbose:
-        logger.min_severity = trt.Logger.Severity.VERBOSE
+    class _BuildLogger(trt.ILogger):
+        """TensorRT logger with the default formatting that also records errors for post-build inspection."""
+
+        def __init__(self, min_severity):
+            """Initialize with the minimum severity to print; errors are always recorded."""
+            super().__init__()
+            self.min_severity = min_severity
+            self.errors = []
+
+        def log(self, severity, msg):
+            """Record errors and print messages at or above the minimum severity, mirroring trt.Logger's format."""
+            if severity <= trt.ILogger.Severity.ERROR:
+                self.errors.append(msg)
+            if severity <= self.min_severity:
+                letter = {0: "!", 1: "E", 2: "W", 3: "I", 4: "V"}.get(int(severity), "?")
+                print(f"[{time.strftime('%m/%d/%Y-%H:%M:%S')}] [TRT] [{letter}] {msg}")
+
+    logger = _BuildLogger(trt.ILogger.Severity.VERBOSE if verbose else trt.ILogger.Severity.INFO)
 
     # Engine builder
     builder = trt.Builder(logger)
@@ -372,7 +393,9 @@ def onnx2engine(
     # platform_has_fast_fp16/int8 were removed from the Builder in TensorRT 10; default to True when absent
     use_fp16 = getattr(builder, "platform_has_fast_fp16", True) and quantize == 16
     use_int8 = getattr(builder, "platform_has_fast_int8", True) and quantize == 8
-    if use_int8 and dataset is None:
+    qdq = any(n.op_type == "QuantizeLinear" for n in onnx.load(onnx_file, load_external_data=False).graph.node)
+    calibrate = use_int8 and not qdq  # explicit quantization carries its ranges in the graph
+    if calibrate and dataset is None:
         raise ValueError("INT8 TensorRT export requires a calibration dataset.")
 
     # Optionally switch to DLA if enabled
@@ -394,7 +417,7 @@ def onnx2engine(
 
     # TensorRT 11 is strongly-typed and removed the FP16/INT8 builder flags and INT8 calibrator, so reduced
     # precision must be baked into the ONNX graph with NVIDIA ModelOpt before parsing (FP16 AutoCast, INT8 Q/DQ)
-    if is_trt11 and (use_fp16 or use_int8):
+    if is_trt11 and (use_fp16 or calibrate):
         onnx_file = modelopt_quantize_onnx(onnx_file, quantize, dataset, shape, dynamic, prefix)
 
     # Read ONNX file
@@ -419,7 +442,7 @@ def onnx2engine(
             inp_max = tuple(d if d != -1 else hi for d, hi in zip(inp.shape, max_shape))
             profile.set_shape(inp.name, min=inp_min, opt=shape, max=inp_max)
         config.add_optimization_profile(profile)
-        if use_int8 and not is_trt10:  # deprecated in TensorRT 10, causes internal errors
+        if calibrate and not is_trt10:  # deprecated in TensorRT 10, causes internal errors
             config.set_calibration_profile(profile)
 
     LOGGER.info(
@@ -428,6 +451,14 @@ def onnx2engine(
     if use_int8 and not is_trt11:
         config.set_flag(trt.BuilderFlag.INT8)
         config.profiling_verbosity = trt.ProfilingVerbosity.DETAILED
+    elif use_fp16 and not is_trt11:
+        config.set_flag(trt.BuilderFlag.FP16)
+        if has_deim and _set_precision_constraint_flag(config, trt, prefix):
+            n_pinned = _pin_deim_fp32_layers(network, trt)
+            LOGGER.info(f"{prefix} DEIM FP16 stability: pinned {n_pinned} TensorRT layers to FP32.")
+
+    # Explicit Q/DQ graphs need neither calibration nor per-layer Sigmoid constraints.
+    if calibrate and not is_trt11:
 
         class EngineCalibrator(trt.IInt8Calibrator):
             """Custom INT8 calibrator for TensorRT engine optimization.
@@ -529,12 +560,6 @@ def onnx2engine(
             config.set_flag(flag)  # OBEY_PRECISION_CONSTRAINTS replaced STRICT_TYPES in TensorRT 8.2
             LOGGER.info(f"{prefix} keeping {count} head Sigmoid layers in FP32 for INT8 accuracy")
 
-    elif use_fp16 and not is_trt11:
-        config.set_flag(trt.BuilderFlag.FP16)
-        if has_deim and _set_precision_constraint_flag(config, trt, prefix):
-            n_pinned = _pin_deim_fp32_layers(network, trt)
-            LOGGER.info(f"{prefix} DEIM FP16 stability: pinned {n_pinned} TensorRT layers to FP32.")
-
     # TensorRT >=10.13 miscompiles the fused DEIM deformable cross-attention; break that fusion and record the real
     # outputs so the runtime can ignore the auxiliary ones. Precision-independent - FP32 engines are affected too.
     if has_deim and check_version(trt.__version__, ">=10.13.0"):
@@ -557,11 +582,34 @@ def onnx2engine(
             )
 
     # Write file
-    if hasattr(builder, "build_serialized_network"):
-        engine = builder.build_serialized_network(network, config)
-    else:
+    def _build():
+        """Build and serialize the engine, or return None on failure."""
+        if hasattr(builder, "build_serialized_network"):
+            return builder.build_serialized_network(network, config)
         engine = builder.build_engine(network, config)
-        engine = None if engine is None else engine.serialize()
+        return None if engine is None else engine.serialize()
+
+    # Implicit INT8 can leave a fused node without any implementable tactic ("Could not find any implementation for
+    # node X", seen on a DEIM neck Conv+SiLU with TensorRT 10.11); pin the reported node's layers to FP32 and retry.
+    layer_by_name = {network.get_layer(i).name: network.get_layer(i) for i in range(network.num_layers)}
+    engine, pinned = None, set()
+    for _ in range(4 if calibrate and not is_trt11 else 1):
+        logger.errors.clear()
+        engine = _build()
+        if engine is not None or not calibrate or is_trt11:
+            break
+        err = next((m for m in logger.errors if "Could not find any implementation for node" in m), "")
+        names = {n for n in re.findall(r"/[\w./]+", err) if n in layer_by_name} - pinned
+        if not names:
+            break
+        for name in names:
+            layer = layer_by_name[name]
+            layer.precision = trt.float32
+            for j in range(layer.num_outputs):
+                layer.set_output_type(j, trt.float32)
+        pinned |= names
+        _set_precision_constraint_flag(config, trt, prefix)
+        LOGGER.info(f"{prefix} INT8 build fallback: pinned {sorted(names)} to FP32, rebuilding engine...")
     if engine is None:
         raise RuntimeError("TensorRT engine build failed, check logs for errors")
     with open(output_file, "wb") as t:

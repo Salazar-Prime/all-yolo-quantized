@@ -45,6 +45,15 @@ def test_amp():
     assert check_amp(model)
 
 
+@pytest.mark.skipif(not DEVICES, reason="No CUDA devices available")
+@pytest.mark.parametrize("cfg", ["yolo27l.yaml", "yolo27x.yaml"])
+def test_deim_fp16(cfg):
+    """Run half-precision DEIM inference with FP32 attention and feed-forward projections."""
+    model = YOLO(cfg)
+    results = model.predict(SOURCE, imgsz=160, device=DEVICES[0], quantize=16)
+    assert all(torch.isfinite(result.boxes.data).all() for result in results)
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(not DEVICES, reason="No CUDA devices available")
 @pytest.mark.parametrize(

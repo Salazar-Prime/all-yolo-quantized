@@ -14,6 +14,62 @@ from ultralytics.utils.ops import xyxy2xywh
 __all__ = "inverse_sigmoid", "multi_scale_deformable_attn_pytorch"
 
 
+def multi_head_attention_forward(
+    ma: nn.MultiheadAttention,
+    q: torch.Tensor,
+    k: torch.Tensor,
+    value: torch.Tensor,
+    attn_mask: torch.Tensor | None = None,
+    key_padding_mask: torch.Tensor | None = None,
+    need_weights: bool = False,
+) -> torch.Tensor:
+    """Run multi-head attention in FP32 and restore the activation dtype.
+
+    Cast inputs and projection parameters together to avoid FP16 attention overflow without changing stored weights.
+
+    Args:
+        ma (nn.MultiheadAttention): Attention module supplying projection parameters.
+        q (torch.Tensor): Query tensor.
+        k (torch.Tensor): Key tensor.
+        value (torch.Tensor): Value tensor.
+        attn_mask (torch.Tensor, optional): Attention mask.
+        key_padding_mask (torch.Tensor, optional): Mask for the keys per batch.
+        need_weights (bool): Use the explicit attention-weight computation.
+
+    Returns:
+        (torch.Tensor): Attention output in the dtype of `value`.
+    """
+    output_dtype = value.dtype
+    # nn.MultiheadAttention projects in its own parameter dtype, so drop to the functional form to upcast both
+    # the activations and the weights. Inputs are batch-first, the functional form is sequence-first.
+    q, k, value = (x.float().transpose(0, 1) for x in (q, k, value))
+    if attn_mask is not None and torch.is_floating_point(attn_mask):
+        attn_mask = attn_mask.float()
+    if key_padding_mask is not None and torch.is_floating_point(key_padding_mask):
+        key_padding_mask = key_padding_mask.float()
+    with torch.autocast(device_type=value.device.type, enabled=False):
+        output = F.multi_head_attention_forward(
+            q,
+            k,
+            value,
+            ma.embed_dim,
+            ma.num_heads,
+            ma.in_proj_weight.float(),
+            ma.in_proj_bias.float(),
+            ma.bias_k,
+            ma.bias_v,
+            ma.add_zero_attn,
+            ma.dropout,
+            ma.out_proj.weight.float(),
+            ma.out_proj.bias.float(),
+            training=ma.training,
+            key_padding_mask=key_padding_mask,
+            need_weights=need_weights,
+            attn_mask=attn_mask,
+        )[0]
+    return output.transpose(0, 1).to(output_dtype)
+
+
 def _get_clones(module, n):
     """Create a list of cloned modules from the given module.
 

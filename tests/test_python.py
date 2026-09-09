@@ -23,6 +23,7 @@ from ultralytics import RTDETR, YOLO
 from ultralytics.cfg import get_cfg
 from ultralytics.data.build import build_dataloader, load_inference_source
 from ultralytics.data.utils import check_cls_dataset, check_det_dataset, get_split_fraction
+from ultralytics.nn.tasks import guess_model_family
 from ultralytics.utils import (
     ARM64,
     ASSETS,
@@ -1024,7 +1025,7 @@ def test_all_model_yamls():
         if "rtdetr" in m.name:
             if TORCH_1_11:
                 _ = RTDETR(m.name)(SOURCE, imgsz=160)
-        else:
+        elif TORCH_1_11 or guess_model_family(m) != "yolodetr":
             YOLO(m.name)
 
 
@@ -1038,7 +1039,7 @@ def test_workflow(isolated_model):
     model.export(format="torchscript")  # WARNING: Windows slow CI export bug
 
 
-@pytest.mark.skipif(not TORCH_1_11, reason="yolo27 DEIM models use RT-DETR components that require torch>=1.11")
+@pytest.mark.skipif(not TORCH_2_0, reason="UltraViT uses scaled_dot_product_attention (torch>=2.0)")
 @pytest.mark.skipif(IS_JETSON or IS_RASPBERRYPI, reason="Edge devices not intended for training")
 def test_yolodetr_train(tmp_path, cfg="yolo27x.yaml"):
     """Test DEIM-routed YOLO train, val, and predict on the UltraViT backbone variant."""

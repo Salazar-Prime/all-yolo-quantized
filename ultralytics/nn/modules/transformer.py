@@ -13,7 +13,7 @@ from torch.nn.init import constant_, xavier_uniform_
 from ultralytics.utils.torch_utils import TORCH_1_11
 
 from .conv import Conv
-from .utils import _get_clones, inverse_sigmoid, multi_scale_deformable_attn_pytorch
+from .utils import _get_clones, inverse_sigmoid, multi_head_attention_forward, multi_scale_deformable_attn_pytorch
 
 __all__ = (
     "AIFI",
@@ -112,7 +112,7 @@ class TransformerEncoderLayer(nn.Module):
             (torch.Tensor): Output tensor after attention and feedforward.
         """
         q = k = self.with_pos_embed(src, pos)
-        src2 = self.ma(q, k, value=src, attn_mask=src_mask, key_padding_mask=src_key_padding_mask)[0]
+        src2 = multi_head_attention_forward(self.ma, q, k, src, src_mask, src_key_padding_mask)
         src = src + self.dropout1(src2)
         src = self.norm1(src)
         src2 = self.fc2(self.dropout(self.act(self.fc1(src))))
@@ -139,7 +139,7 @@ class TransformerEncoderLayer(nn.Module):
         """
         src2 = self.norm1(src)
         q = k = self.with_pos_embed(src2, pos)
-        src2 = self.ma(q, k, value=src2, attn_mask=src_mask, key_padding_mask=src_key_padding_mask)[0]
+        src2 = multi_head_attention_forward(self.ma, q, k, src2, src_mask, src_key_padding_mask)
         src = src + self.dropout1(src2)
         src2 = self.norm2(src)
         src2 = self.fc2(self.dropout(self.act(self.fc1(src2))))

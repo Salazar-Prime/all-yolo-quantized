@@ -1331,10 +1331,17 @@ class Attention(nn.Module):
             x = F.scaled_dot_product_attention(q.transpose(-2, -1), k.transpose(-2, -1), v.transpose(-2, -1))
             x = x.transpose(-2, -1).reshape(B, C, H, W) + self.pe(v.reshape(B, C, H, W))
         else:
-            attn = ((q * self.scale).transpose(-2, -1) @ k).softmax(dim=-1)
+            attn = self._get_attention(q, k)
             x = (v @ attn.transpose(-2, -1)).view(B, C, H, W) + self.pe(v.reshape(B, C, H, W))
         x = self.proj(x)
         return x
+
+    def _get_attention(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
+        """Compute attention scores in FP32 to keep mixed-precision matmul and softmax stable."""
+        with autocast(enabled=False, device=q.device.type):
+            attn = (q.float().transpose(-2, -1) @ k.float()) * self.scale
+            attn = attn.softmax(dim=-1)
+        return attn.to(q.dtype)
 
 
 class PSABlock(nn.Module):
