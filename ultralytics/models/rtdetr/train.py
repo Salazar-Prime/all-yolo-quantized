@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import math
 from copy import copy
-
-from torch import optim
 
 from ultralytics.cfg import DEFAULT_CFG
 from ultralytics.data.utils import get_split_fraction
@@ -14,7 +11,7 @@ from ultralytics.nn.tasks import RTDETRDetectionModel, YOLODETRDetectionModel
 from ultralytics.utils import LOGGER, RANK, colorstr
 from ultralytics.utils.torch_utils import unwrap_model
 
-from .val import DEIMDataset, RTDETRDataset, RTDETRValidator, compute_policy_epochs
+from .val import RTDETRDataset, RTDETRValidator
 
 
 class RTDETRTrainer(DetectionTrainer):
@@ -97,12 +94,10 @@ class RTDETRTrainer(DetectionTrainer):
 
 
 class DEIMTrainer(RTDETRTrainer):
-    """RT-DETR trainer for DeimDecoder models with augmentation decay + flat-cosine LR.
+    """RT-DETR trainer for DeimDecoder models.
 
     ``backbone_lr_ratio`` defaults to 0.1 and discounts the backbone param groups' LR in ``build_optimizer``.
     """
-
-    _epoch_callback_registered = False
 
     def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks=None):
         """Initialize the DEIM trainer with a 0.1 backbone LR ratio and no separate bias warmup LR."""
@@ -125,84 +120,6 @@ class DEIMTrainer(RTDETRTrainer):
         if weights:
             model.load(weights)
         return model
-
-    def build_dataset(self, img_path, mode="val", batch=None):
-        """Build DEIMDataset for train (with decay schedule); use it for val as well (no augmentation applied).
-
-        Args:
-            img_path (str): Path to the image directory.
-            mode (str): Dataset mode, either train or val; only train applies the augmentation decay schedule.
-            batch (int, optional): Batch size, used for rect mode.
-
-        Returns:
-            (DEIMDataset): Dataset for the requested mode.
-        """
-        return DEIMDataset(
-            img_path=img_path,
-            imgsz=self.args.imgsz,
-            batch_size=batch,
-            augment=mode == "train",
-            hyp=self.args,
-            rect=False,
-            cache=self.args.cache or None,
-            single_cls=self.args.single_cls or False,
-            prefix=colorstr(f"{mode}: "),
-            classes=self.args.classes,
-            data=self.data,
-            fraction=1.0 if self.data.get("complete") else get_split_fraction(self.args.fraction, mode),
-        )
-
-    def _setup_scheduler(self):
-        """Set up the flat-cosine LR schedule used by DEIM training."""
-        _, mid, _ = compute_policy_epochs(self.args)
-        flat_epoch = int(mid)
-        gamma = float(self.args.lrf)
-        if not (0.0 <= gamma <= 1.0):
-            raise ValueError(f"flatcosine got invalid lrf={gamma}. Expected 0.0 <= lrf <= 1.0.")
-        decay_epochs = max(self.epochs - flat_epoch, 1)
-
-        def _flat_cosine(epoch: int) -> float:
-            """Hold the learning rate flat until flat_epoch, then decay it to lrf on a cosine curve."""
-            if epoch < flat_epoch:
-                return 1.0
-            progress = min(max((epoch - flat_epoch) / decay_epochs, 0.0), 1.0)
-            return gamma + 0.5 * (1.0 - gamma) * (1.0 + math.cos(math.pi * progress))
-
-        self.lf = _flat_cosine
-        self.scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=self.lf)
-
-    def _on_train_epoch_start(self, trainer=None):
-        """Propagate epoch to dataset transforms and stop multi-scale at the no-aug boundary.
-
-        Args:
-            trainer (DEIMTrainer, optional): Trainer passed by the callback, defaulting to self.
-        """
-        trainer = trainer or self
-        epoch = int(trainer.epoch)
-        dataset = trainer.train_loader.dataset
-        dataset.set_epoch(epoch)
-        trainer.train_loader.reset()
-        stop_epoch = int(dataset.policy_epochs[-1])
-        if epoch == stop_epoch and trainer.args.multi_scale > 0:
-            trainer.args.multi_scale = 0.0
-            LOGGER.info(f"DEIM no-aug stage at epoch {epoch}: disabling multi-scale")
-
-    def train(self, *args, **kwargs):
-        """Disable close_mosaic (decay schedule replaces it) and register the epoch callback.
-
-        Args:
-            *args (Any): Positional arguments forwarded to RTDETRTrainer.train.
-            **kwargs (Any): Keyword arguments forwarded to RTDETRTrainer.train.
-
-        Returns:
-            (Any): Result of the parent train call.
-        """
-        if self.args.close_mosaic:
-            self.args.close_mosaic = 0
-        if not self._epoch_callback_registered:
-            self.add_callback("on_train_epoch_start", self._on_train_epoch_start)
-            self._epoch_callback_registered = True
-        return super().train(*args, **kwargs)
 
     def get_validator(self):
         """Return an RTDETRValidator with loss_names extended for the DEIM head.
