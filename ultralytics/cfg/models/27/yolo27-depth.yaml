@@ -14,8 +14,7 @@ scales: # model compound scaling constants
   n: [0.50, 0.25, 1024, {bbp3e: 0.5}]
   s: [0.50, 0.50, 1024, {bbp3e: 0.5}]
   m: [0.50, 1.00, 512, {bbp3e: 0.25}]
-  l: [1.00, 1.00, 512, {bbp3e: 0.25}]
-  x: [1.00, 1.50, 512, {bbp3e: 0.25}]
+  l: [1.00, 1.50, 512, {bbp3e: 0.25}]
 
 # YOLO27n-depth backbone
 backbone:

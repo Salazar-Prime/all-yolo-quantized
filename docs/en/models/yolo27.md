@@ -10,10 +10,10 @@ keywords: YOLO27, Ultralytics YOLO, object detection, NMS-free, end-to-end detec
 
 [Ultralytics](https://www.ultralytics.com) YOLO27 is a family of real-time vision models built around two
 complementary designs: a streamlined CNN architecture for the compact N and S models, and a query-based, NMS-free
-architecture for the larger M, L, and X models. Both designs are end-to-end and deploy through the same interface.
+architecture for the larger M and L models. Both designs are end-to-end and deploy through the same interface.
 
-Across its five detection scales, YOLO27 reaches **41.6-60.4 mAP on COCO** at **1.8-11.4 ms latency on an NVIDIA
-T4** — and up to **61.2 mAP** with YOLO27x at a larger 800-pixel input. YOLO27x is the **first Ultralytics model to
+Across its four detection scales, YOLO27 reaches **41.6-60.4 mAP on COCO** at **1.8-11.4 ms latency on an NVIDIA
+T4** — and up to **61.2 mAP** with YOLO27l at a larger 800-pixel input. YOLO27l is the **first Ultralytics model to
 surpass 60 mAP on COCO**, while the compact YOLO27n/s improve on YOLO26n/s accuracy at essentially the same speed.
 
 ### YOLO27 vs YOLO26
@@ -25,8 +25,9 @@ YOLO26 is compared using its end-to-end (one-to-one head) numbers, matching YOLO
 | n     | 40.1                                    | 41.6                              | +1.5     | 1.7            | 1.8            |
 | s     | 47.8                                    | 49.2                              | +1.4     | 2.5            | 2.7            |
 | m     | 52.5                                    | 55.7                              | +3.2     | 4.7            | 4.7            |
-| l     | 54.4                                    | 57.7                              | +3.3     | 6.2            | 6.5            |
-| x     | 56.9                                    | 60.4                              | **+3.5** | 11.8           | 11.4           |
+| l †   | 56.9                                    | 60.4                              | **+3.5** | 11.8           | 11.4           |
+
+<sup>†</sup> YOLO27l is the former X-scale model, compared here against YOLO26x as the largest YOLO26 scale.
 
 !!! example "Quickstart"
 
@@ -67,9 +68,9 @@ YOLO26 is compared using its end-to-end (one-to-one head) numbers, matching YOLO
 
 - **Query-based detection without NMS**
   The larger models replace dense prediction with a transformer decoder that refines a fixed set of object queries
-  and directly outputs the final detections — no non-maximum suppression post-processing needed. YOLO27m and YOLO27l
-  pair this decoder with the proven YOLO26-style convolutional backbone, while YOLO27x keeps the same FPN/PAN neck
-  and swaps in an UltraViT backbone that uses self-attention in its deepest stage to capture global context.
+  and directly outputs the final detections — no non-maximum suppression post-processing needed. YOLO27m pairs this
+  decoder with the proven YOLO26-style convolutional backbone, while YOLO27l keeps the same FPN/PAN neck and swaps
+  in an UltraViT backbone that uses self-attention in its deepest stage to capture global context.
 
 - **One simple interface**
   Both architectures are used through the same `YOLO` class. The right training, validation, prediction, and export
@@ -80,32 +81,32 @@ YOLO26 is compared using its end-to-end (one-to-one head) numbers, matching YOLO
 
 - **YOLO27n / YOLO27s** — edge devices, drones, and real-time video: the fastest models in the family, with improved
   small-object detection from the dual-scale design.
-- **YOLO27m / YOLO27l** — the accuracy-speed sweet spot on GPUs: YOLO27m alone improves on YOLO26m by 3.2 mAP at
-  the same T4 latency, making it the default choice for production GPU deployment.
-- **YOLO27x** — accuracy-critical applications: the first Ultralytics model above 60 mAP on COCO, reaching 61.2 mAP
+- **YOLO27m** — the accuracy-speed sweet spot on GPUs: improves on YOLO26m by 3.2 mAP at the same T4 latency,
+  making it the default choice for production GPU deployment.
+- **YOLO27l** — accuracy-critical applications: the first Ultralytics model above 60 mAP on COCO, reaching 61.2 mAP
   at a larger input size while staying real-time on GPU.
 
 ---
 
 ## Supported Tasks and Modes
 
-YOLO27 supports the following tasks across its five model scales, all with training, validation, inference, and
+YOLO27 supports the following tasks across its four model scales, all with training, validation, inference, and
 export support:
 
-| Model        | Filenames                                                                                      | Task                                          | Training | Validation | Inference | Export |
-| ------------ | ---------------------------------------------------------------------------------------------- | --------------------------------------------- | -------- | ---------- | --------- | ------ |
-| YOLO27       | `yolo27n.pt` `yolo27s.pt` `yolo27m.pt` `yolo27l.pt` `yolo27x.pt`                               | [Detection](../tasks/detect.md)               | ✅       | ✅         | ✅        | ✅     |
-| YOLO27-seg   | `yolo27n-seg.pt` `yolo27s-seg.pt` `yolo27m-seg.pt` `yolo27l-seg.pt` `yolo27x-seg.pt`           | [Instance Segmentation](../tasks/segment.md)  | ✅       | ✅         | ✅        | ✅     |
-| YOLO27-sem   | `yolo27n-sem.pt` `yolo27s-sem.pt` `yolo27m-sem.pt` `yolo27l-sem.pt` `yolo27x-sem.pt`           | [Semantic Segmentation](../tasks/semantic.md) | ✅       | ✅         | ✅        | ✅     |
-| YOLO27-depth | `yolo27n-depth.pt` `yolo27s-depth.pt` `yolo27m-depth.pt` `yolo27l-depth.pt` `yolo27x-depth.pt` | [Depth Estimation](../tasks/depth.md)         | ✅       | ✅         | ✅        | ✅     |
-| YOLO27-cls   | `yolo27n-cls.pt` `yolo27s-cls.pt` `yolo27m-cls.pt` `yolo27l-cls.pt` `yolo27x-cls.pt`           | [Classification](../tasks/classify.md)        | ✅       | ✅         | ✅        | ✅     |
-| YOLO27-pose  | `yolo27n-pose.pt` `yolo27s-pose.pt` `yolo27m-pose.pt` `yolo27l-pose.pt` `yolo27x-pose.pt`      | [Pose/Keypoints](../tasks/pose.md)            | ✅       | ✅         | ✅        | ✅     |
-| YOLO27-obb   | `yolo27n-obb.pt` `yolo27s-obb.pt` `yolo27m-obb.pt` `yolo27l-obb.pt` `yolo27x-obb.pt`           | [Oriented Detection](../tasks/obb.md)         | ✅       | ✅         | ✅        | ✅     |
+| Model        | Filenames                                                                   | Task                                          | Training | Validation | Inference | Export |
+| ------------ | --------------------------------------------------------------------------- | --------------------------------------------- | -------- | ---------- | --------- | ------ |
+| YOLO27       | `yolo27n.pt` `yolo27s.pt` `yolo27m.pt` `yolo27l.pt`                         | [Detection](../tasks/detect.md)               | ✅       | ✅         | ✅        | ✅     |
+| YOLO27-seg   | `yolo27n-seg.pt` `yolo27s-seg.pt` `yolo27m-seg.pt` `yolo27l-seg.pt`         | [Instance Segmentation](../tasks/segment.md)  | ✅       | ✅         | ✅        | ✅     |
+| YOLO27-sem   | `yolo27n-sem.pt` `yolo27s-sem.pt` `yolo27m-sem.pt` `yolo27l-sem.pt`         | [Semantic Segmentation](../tasks/semantic.md) | ✅       | ✅         | ✅        | ✅     |
+| YOLO27-depth | `yolo27n-depth.pt` `yolo27s-depth.pt` `yolo27m-depth.pt` `yolo27l-depth.pt` | [Depth Estimation](../tasks/depth.md)         | ✅       | ✅         | ✅        | ✅     |
+| YOLO27-cls   | `yolo27n-cls.pt` `yolo27s-cls.pt` `yolo27m-cls.pt` `yolo27l-cls.pt`         | [Classification](../tasks/classify.md)        | ✅       | ✅         | ✅        | ✅     |
+| YOLO27-pose  | `yolo27n-pose.pt` `yolo27s-pose.pt` `yolo27m-pose.pt` `yolo27l-pose.pt`     | [Pose/Keypoints](../tasks/pose.md)            | ✅       | ✅         | ✅        | ✅     |
+| YOLO27-obb   | `yolo27n-obb.pt` `yolo27s-obb.pt` `yolo27m-obb.pt` `yolo27l-obb.pt`         | [Oriented Detection](../tasks/obb.md)         | ✅       | ✅         | ✅        | ✅     |
 
 !!! note "Two architecture paths"
 
     YOLO27 detection uses two designs under one interface: the N and S scales use the streamlined CNN architecture,
-    while the M, L, and X scales use the query-based NMS-free architecture. All other tasks use the CNN architecture.
+    while the M and L scales use the query-based NMS-free architecture. All other tasks use the CNN architecture.
 
 ---
 
@@ -119,7 +120,7 @@ with `yolo val model=yolo27n.pt data=coco.yaml`.
 
     === "Detection (COCO)"
 
-        See [Detection Docs](../tasks/detect.md) for usage examples with these models trained on [COCO](../datasets/detect/coco.md), which include 80 pretrained classes. YOLO27x is additionally reported at an 800-pixel input.
+        See [Detection Docs](../tasks/detect.md) for usage examples with these models trained on [COCO](../datasets/detect/coco.md), which include 80 pretrained classes. YOLO27l is additionally reported at an 800-pixel input.
 
         --8<-- "docs/macros/yolo-det-perf.md"
 
@@ -220,14 +221,14 @@ repository](https://github.com/ultralytics/ultralytics) and [Ultralytics Docs](.
 - **Stronger small-object detection (N/S)**: a widened early feature stage improves small-object localization
 - **Foreground alignment supervision (N/S)**: cuts the one-to-many vs one-to-one accuracy gap from 0.9/0.8 mAP on
   YOLO26n/s to 0.4 mAP on YOLO27n/s, at zero inference cost
-- **Query-based NMS-free detection (M/L/X)**: a transformer decoder outputs final detections directly
+- **Query-based NMS-free detection (M/L)**: a transformer decoder outputs final detections directly
 - **One simple interface**: both architectures run through the same `YOLO` class
 
 ### Should I upgrade from YOLO26?
 
 Yes, for most use cases. YOLO27 improves end-to-end accuracy at every scale: +1.5/+1.4 mAP for the compact n/s
-models at essentially the same speed, and +3.2/+3.3/+3.5 mAP for m/l/x. YOLO27x is the first Ultralytics model to
-surpass 60 mAP on COCO.
+models at essentially the same speed, +3.2 mAP for m, and +3.5 mAP for l over the largest YOLO26 scale. YOLO27l is
+the first Ultralytics model to surpass 60 mAP on COCO.
 
 ### Is YOLO27 a drop-in replacement for YOLO26?
 
@@ -241,9 +242,9 @@ Most detectors predict on three feature maps at different resolutions. YOLO27 N 
 objects depend on and the coarse map that large objects need, and skip the medium one. This cuts a significant share
 of detection-head computation, and the training improvements above keep the accuracy-latency tradeoff competitive.
 
-### What makes the YOLO27x result notable?
+### What makes the YOLO27l result notable?
 
-YOLO27x is the first Ultralytics model to surpass 60 mAP on COCO, reaching 60.4 mAP at a 640-pixel input (11.4 ms on
+YOLO27l is the first Ultralytics model to surpass 60 mAP on COCO, reaching 60.4 mAP at a 640-pixel input (11.4 ms on
 an NVIDIA T4) and 61.2 mAP at an 800-pixel input (16.8 ms). It combines the UltraViT backbone, multi-scale feature
 fusion, and a query-based detector that produces final detections directly, without NMS.
 

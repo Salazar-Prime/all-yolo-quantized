@@ -1041,7 +1041,7 @@ def test_workflow(isolated_model):
 
 @pytest.mark.skipif(not TORCH_2_0, reason="UltraViT uses scaled_dot_product_attention (torch>=2.0)")
 @pytest.mark.skipif(IS_JETSON or IS_RASPBERRYPI, reason="Edge devices not intended for training")
-def test_yolodetr_train(tmp_path, cfg="yolo27x.yaml"):
+def test_yolodetr_train(tmp_path, cfg="yolo27l.yaml"):
     """Test DEIM-routed YOLO train, val, and predict on the UltraViT backbone variant."""
     model = YOLO(cfg)  # configs carry no 'detr' token, so routing reads the declared decoder
     assert type(model) is YOLO and model._deim  # DEIM models keep the YOLO facade and route via task_map

@@ -127,7 +127,7 @@ def test_rtdetr(task: str = "detect", model: Path = WEIGHTS_DIR / "rtdetr-l.pt",
 
 @pytest.mark.skipif(not TORCH_2_0, reason="UltraViT uses scaled_dot_product_attention (torch>=2.0)")
 @pytest.mark.skipif(IS_RASPBERRYPI, reason="Edge devices not intended for training")
-def test_yolodetr(model: str = "yolo27x.yaml", data: str = "coco8.yaml") -> None:
+def test_yolodetr(model: str = "yolo27l.yaml", data: str = "coco8.yaml") -> None:
     """Test DEIM-routed YOLO CLI predict and from-scratch training on the UltraViT backbone variant."""
     run(f"yolo predict detect model={model} source={ASSETS / 'bus.jpg'} imgsz=160 save")
     run(f"yolo train detect model={model} data={data} imgsz=160 epochs=1 cache=disk")

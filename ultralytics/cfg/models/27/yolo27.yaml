@@ -7,7 +7,7 @@
 # The neck dams upsampled features with SNI x0.5 (Scale) before fusion, and the backbone P3
 # stage C3k2 expansion is per-scale via the `bbp3e` scales arg: the 4th element of a scales
 # entry is a dict of named values referenced by name in layer args (see backbone layer 4).
-# Detection m/l/x scales are the standalone DEIM-decoder yolo27{m,l,x}.yaml models.
+# Detection m/l scales are the standalone DEIM-decoder yolo27{m,l}.yaml models.
 
 # Parameters
 nc: 80 # number of classes

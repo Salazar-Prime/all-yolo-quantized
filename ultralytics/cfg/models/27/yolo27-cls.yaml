@@ -12,8 +12,7 @@ scales: # model compound scaling constants, i.e. 'model=yolo27n-cls.yaml' will c
   n: [0.50, 0.25, 1024] # summary: 86 layers, 2,856,360 parameters, 2,856,360 gradients, 0.5 GFLOPs
   s: [0.50, 0.50, 1024] # summary: 86 layers, 6,900,584 parameters, 6,900,584 gradients, 1.8 GFLOPs
   m: [0.50, 1.00, 512] # summary: 106 layers, 12,438,568 parameters, 12,438,568 gradients, 6.1 GFLOPs
-  l: [1.00, 1.00, 512] # summary: 176 layers, 15,527,208 parameters, 15,527,208 gradients, 8.3 GFLOPs
-  x: [1.00, 1.50, 512] # summary: 176 layers, 32,811,208 parameters, 32,811,208 gradients, 18.6 GFLOPs
+  l: [1.00, 1.50, 512] # summary: 176 layers, 32,811,208 parameters, 32,811,208 gradients, 18.6 GFLOPs
 
 # YOLO27n-cls backbone
 backbone:

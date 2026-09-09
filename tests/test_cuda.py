@@ -46,7 +46,7 @@ def test_amp():
 
 
 @pytest.mark.skipif(not DEVICES, reason="No CUDA devices available")
-@pytest.mark.parametrize("cfg", ["yolo27l.yaml", "yolo27x.yaml"])
+@pytest.mark.parametrize("cfg", ["yolo27m.yaml", "yolo27l.yaml"])
 def test_deim_fp16(cfg):
     """Run half-precision DEIM inference with FP32 attention and feed-forward projections."""
     model = YOLO(cfg)
