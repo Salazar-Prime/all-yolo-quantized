@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ultralytics.utils.torch_utils import fuse_conv_and_bn
+from ultralytics.utils.torch_utils import autocast, fuse_conv_and_bn
 
 from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, autopad
 from .transformer import TransformerBlock
