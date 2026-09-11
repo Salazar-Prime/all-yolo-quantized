@@ -9,7 +9,7 @@ python_bin="${experiment_dir}/.venv/bin/python"
 
 [[ "$(hostname -s)" == digital-ag ]] || { echo 'Exp3 must run on Rainbow.' >&2; exit 2; }
 gpu_uuid="$(nvidia-smi -i 1 --query-gpu=uuid --format=csv,noheader)"
-if nvidia-smi --query-compute-apps=gpu_uuid --format=csv,noheader | rg -Fxq "$gpu_uuid"; then
+if nvidia-smi --query-compute-apps=gpu_uuid --format=csv,noheader | grep -Fxq "$gpu_uuid"; then
     echo 'Rainbow GPU 1 is already in use.' >&2
     exit 2
 fi
