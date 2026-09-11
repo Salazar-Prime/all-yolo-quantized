@@ -494,6 +494,169 @@ def printStatistics(
         )
 
 
+def matchGroundTruth(
+    objects: list[dict], pred: dict, imageShape: tuple, confidence: float, iouThreshold: float
+) -> dict:
+    """Match native-pixel predictions to manifest objects by descending IoU, then confidence for ties.
+
+    Only same-class pairs with confidence >= the cutoff and IoU > the cutoff are eligible. Each prediction and GT
+    can be used once. Unmatched predictions with an eligible GT are discarded duplicates; all others are extra boxes.
+    """
+    import numpy as np
+    import torch
+
+    from ultralytics.utils.metrics import box_iou
+    from ultralytics.utils.ops import xywh2xyxy
+
+    keep = pred["conf"].float() >= confidence
+    pred = {key: pred[key][keep].detach().float().cpu() for key in ("bboxes", "cls", "conf")}
+    boxes = torch.tensor(
+        [[obj[key] for key in ("xCenter", "yCenter", "boxWidth", "boxHeight")] for obj in objects], dtype=torch.float32
+    ).reshape(-1, 4)
+    height, width = imageShape
+    boxes = xywh2xyxy(boxes) * torch.tensor([width, height, width, height])
+    ious = box_iou(boxes, pred["bboxes"]).numpy()
+    classes = np.array([obj["classId"] for obj in objects])
+    eligible = (ious > iouThreshold) & (classes[:, None] == pred["cls"].numpy())
+    pairs = np.argwhere(eligible).tolist()
+    scores = pred["conf"].tolist()
+    pairs.sort(key=lambda pair: (-ious[tuple(pair)], -scores[pair[1]], pair[0], pair[1]))
+    matchedGt, matchedPred = set(), set()
+    for gtIndex, predIndex in pairs:
+        if gtIndex not in matchedGt and predIndex not in matchedPred:
+            matchedGt.add(gtIndex)
+            matchedPred.add(predIndex)
+    extraIndices = np.flatnonzero(~eligible.any(axis=0)).tolist()
+    return {
+        "detectedObjectUuids": [obj["objectUuid"] for index, obj in enumerate(objects) if index in matchedGt],
+        "missedObjectUuids": [obj["objectUuid"] for index, obj in enumerate(objects) if index not in matchedGt],
+        "discardedDuplicatePredictions": len(scores) - len(matchedPred) - len(extraIndices),
+        "extraPredictions": [
+            {
+                "bboxXYXY": pred["bboxes"][index].tolist(),
+                "classId": int(pred["cls"][index]),
+                "confidence": scores[index],
+            }
+            for index in extraIndices
+        ],
+    }
+
+
+def evaluateModel(model, args, dataYaml: Path, splitName: str, runName: str) -> dict:
+    """Evaluate one manifest split and optionally save UUID-level GT coverage beside the standard results."""
+    evaluationArguments = {
+        "data": str(dataYaml),
+        "split": splitName,
+        "name": runName,
+        "imgsz": args.imageSize,
+        "batch": args.batchSize,
+        "workers": args.workers,
+        "project": str(args.project.expanduser().resolve()),
+        "exist_ok": args.existOk,
+        "plots": not args.disablePlots,
+    }
+    if args.device is not None:
+        evaluationArguments["device"] = args.device
+    reports = {}
+    if args.gtCoverage:
+        from ultralytics.models.yolo.detect import DetectionValidator
+
+        splits, _, _, _ = loadDatasetSplits(args.manifest.expanduser().resolve(), args.splitSeed, args.splitRatios)
+        # Prepared filenames retain the source split record index, including gaps left by filtering.
+        objectsByImage = {
+            path.name: selectObjects(
+                splits[splitName][int(path.name.split("_", 1)[0])].get("objects", []), args.objectSize
+            )
+            for path in sorted((dataYaml.parent / "images" / splitName).iterdir())
+        }
+        uuids = [obj.get("objectUuid") for objects in objectsByImage.values() for obj in objects]
+        if any(not isinstance(value, str) or not value.strip() for value in uuids) or len(set(uuids)) != len(uuids):
+            raise ValueError("GT coverage requires a nonempty, unique objectUuid for every selected object")
+
+        class CoverageValidator(DetectionValidator):
+            """Collect manifest GT matches from the existing validation pass."""
+
+            def update_metrics(self, preds, batch):
+                """Preserve standard metrics and record native-pixel box matches for every image."""
+                super().update_metrics(preds, batch)
+                for index, pred in enumerate(preds):
+                    pbatch = self._prepare_batch(index, batch)
+                    imageName = Path(pbatch["im_file"]).name
+                    reports[imageName] = {
+                        "filePath": str(Path(pbatch["im_file"]).resolve()),
+                        **matchGroundTruth(
+                            objectsByImage[imageName],
+                            self.scale_preds(pred, pbatch),
+                            pbatch["ori_shape"],
+                            args.gtConf,
+                            args.gtIou,
+                        ),
+                    }
+
+        evaluationArguments["validator"] = CoverageValidator
+        # Keep the standard low-confidence mAP pass, lowering its floor only for a smaller requested GT cutoff.
+        evaluationArguments["conf"] = min(0.001, args.gtConf / 2)
+
+    results = model.val(**evaluationArguments)
+    metrics = {key: float(value) for key, value in results.results_dict.items()}
+    if args.gtCoverage:
+        if reports.keys() != objectsByImage.keys():
+            raise ValueError("GT coverage is incomplete: the validation loader skipped prepared images")
+        missed = [value for report in reports.values() for value in report["missedObjectUuids"]]
+        total = len(uuids)
+        coverage = {
+            "gtTotal": total,
+            "gtDetected": total - len(missed),
+            "gtCoveragePercent": 100.0 * (total - len(missed)) / total,
+            "extraPredictions": sum(len(report["extraPredictions"]) for report in reports.values()),
+            "discardedDuplicatePredictions": sum(
+                report["discardedDuplicatePredictions"] for report in reports.values()
+            ),
+        }
+        metrics.update({f"gt/{key}": value for key, value in coverage.items()})
+        reportPath = results.save_dir / "gt_coverage.json"
+        reportPath.write_text(
+            json.dumps(
+                {
+                    "model": str(model.model_name),
+                    "manifest": str(args.manifest.expanduser().resolve()),
+                    "split": splitName,
+                    "confidenceThreshold": args.gtConf,
+                    "iouThreshold": args.gtIou,
+                    **coverage,
+                    "missedObjectUuids": missed,
+                    "images": reports,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        print(f"GT coverage: {json.dumps(coverage)}; object report: {reportPath}")
+    return metrics
+
+
+def addEvaluationArguments(parser: argparse.ArgumentParser) -> None:
+    """Add optional UUID coverage and its independent matching cutoffs to evaluation entry points."""
+
+    def threshold(value: str) -> float:
+        """Require a finite probability, including either endpoint."""
+        number = float(value)
+        if not 0 <= number <= 1:
+            raise argparse.ArgumentTypeError("threshold must be in [0, 1]")
+        return number
+
+    parser.add_argument(
+        "--gt-coverage", dest="gtCoverage", action="store_true", help="Report GT coverage and missed UUIDs."
+    )
+    parser.add_argument(
+        "--gt-conf", dest="gtConf", type=threshold, default=0.25, help="GT confidence cutoff. Default: 0.25."
+    )
+    parser.add_argument(
+        "--gt-iou", dest="gtIou", type=threshold, default=0.5, help="Strict GT IoU cutoff. Default: 0.5."
+    )
+
+
 def runExperiment(args, dataYaml: Path) -> None:
     """Train YOLO, then evaluate its best checkpoint on val and test."""
     try:
@@ -574,20 +737,8 @@ def runExperiment(args, dataYaml: Path) -> None:
         raise FileNotFoundError("Training completed without a saved checkpoint")
 
     evaluationModel = YOLO(str(bestCheckpoint))
-    evaluationArguments = {
-        "data": str(dataYaml),
-        "imgsz": args.imageSize,
-        "batch": args.batchSize,
-        "workers": args.workers,
-        "project": str(project),
-        "exist_ok": args.existOk,
-        "plots": not args.disablePlots,
-    }
-    if args.device is not None:
-        evaluationArguments["device"] = args.device
-
-    finalValidation = evaluationModel.val(split="val", name=runName + "_final_val", **evaluationArguments)
-    finalTest = evaluationModel.val(split="test", name=runName + "_final_test", **evaluationArguments)
+    finalValidation = evaluateModel(evaluationModel, args, dataYaml, "val", runName + "_final_val")
+    finalTest = evaluateModel(evaluationModel, args, dataYaml, "test", runName + "_final_test")
 
     if wandbModule is not None:
         finalRun = wandbModule.run
@@ -606,7 +757,7 @@ def runExperiment(args, dataYaml: Path) -> None:
             ("final_val", finalValidation),
             ("final_test", finalTest),
         ):
-            for key, value in metrics.results_dict.items():
+            for key, value in metrics.items():
                 try:
                     finalMetrics[f"{prefix}/{key}"] = float(value)
                 except (TypeError, ValueError):
@@ -703,6 +854,7 @@ def parseArguments() -> argparse.Namespace:
     """Parse manifest preparation and YOLO experiment arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
     addManifestArguments(parser)
+    addEvaluationArguments(parser)
 
     parser.add_argument(
         "--model",
