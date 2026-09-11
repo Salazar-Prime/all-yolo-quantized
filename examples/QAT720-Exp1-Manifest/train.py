@@ -508,7 +508,8 @@ def matchGroundTruth(
     from ultralytics.utils.metrics import box_iou
     from ultralytics.utils.ops import xywh2xyxy
 
-    pred = {key: pred[key][pred["conf"] >= confidence].detach().float().cpu() for key in ("bboxes", "cls", "conf")}
+    keep = pred["conf"].float() >= confidence
+    pred = {key: pred[key][keep].detach().float().cpu() for key in ("bboxes", "cls", "conf")}
     boxes = torch.tensor(
         [[obj[key] for key in ("xCenter", "yCenter", "boxWidth", "boxHeight")] for obj in objects], dtype=torch.float32
     ).reshape(-1, 4)
