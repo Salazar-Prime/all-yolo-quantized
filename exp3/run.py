@@ -67,6 +67,7 @@ def summarize(project: Path, cases: list[dict]) -> list[dict]:
         "",
         "GT matching: confidence >= 0.25, IoU > 0.5, same class, highest IoU first; one prediction per GT.",
         "Conflicting duplicates are excluded from extra boxes. mAP@0.5 uses the standard low-confidence validator pass.",
+        "Inference uses FP32 and external NMS (IoU 0.7, maximum 300 detections), including the one-to-many head on YOLO26/YOLOv10.",
         "mAP is stored on a 0–1 scale in CSV and shown as a percentage below, alongside GT coverage.",
         "",
         "| Training | Model | mAP@0.5 (%) | GT detected (%) | Detected / total | Missed | Extras | Duplicates |",
@@ -82,6 +83,83 @@ def summarize(project: Path, cases: list[dict]) -> list[dict]:
     return rows
 
 
+def finalReport(project: Path, cases: list[dict]) -> None:
+    """Verify every reported UUID against its source image and plot the completed model comparison."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    records = json.loads((HERE / "inputs/manifests/testManifest.json").read_text())
+    rows = summarize(project, cases)
+    if len(rows) != len(cases):
+        raise ValueError("The final comparison requires all checkpoint results")
+    for case in cases:
+        report = json.loads((project / case["experiment"] / case["model"] / "gt_coverage.json").read_text())
+        missed, detected, extras, duplicates = [], [], 0, 0
+        if len(report["images"]) != len(records) or {int(name.split("_", 1)[0]) for name in report["images"]} != set(
+            range(len(records))
+        ):
+            raise ValueError(f"Incomplete image coverage for {case['experiment']}/{case['model']}")
+        for imageName, image in report["images"].items():
+            source = records[int(imageName.split("_", 1)[0])]
+            if Path(image["filePath"]).name != source["fileName"]:
+                raise ValueError(f"Incorrect source image for {imageName}")
+            expected = {obj["objectUuid"] for obj in source.get("objects", [])}
+            found, absent = image["detectedObjectUuids"], image["missedObjectUuids"]
+            if set(found) & set(absent) or set(found + absent) != expected or len(found + absent) != len(expected):
+                raise ValueError(f"Incorrect UUID accounting in {imageName}")
+            detected.extend(found)
+            missed.extend(absent)
+            extras += len(image["extraPredictions"])
+            duplicates += image["discardedDuplicatePredictions"]
+        if (
+            len(detected) != report["gtDetected"]
+            or len(detected + missed) != report["gtTotal"]
+            or missed != report["missedObjectUuids"]
+            or extras != report["extraPredictions"]
+            or duplicates != report["discardedDuplicatePredictions"]
+        ):
+            raise ValueError(f"Incorrect aggregate accounting for {case['experiment']}/{case['model']}")
+    verification = {
+        "verified_checkpoints": len(rows),
+        "images_per_checkpoint": len(records),
+        "gt_objects_per_checkpoint": sum(len(record.get("objects", [])) for record in records),
+        "uuid_accounting": "Every source UUID appears exactly once as detected or missed in its original image",
+        "aggregate_counts": "Detected, missed, extra, and duplicate totals agree with all per-image records",
+    }
+    (project / "verification.json").write_text(json.dumps(verification, indent=2) + "\n")
+    groups = {
+        experiment: {row["model"]: row for row in rows if row["experiment"] == experiment}
+        for experiment in ("exp2", "exp2.5")
+    }
+    models = sorted(groups["exp2"], key=lambda model: groups["exp2"][model]["map50"], reverse=True)
+    positions = list(range(len(models)))
+    figure, axes = plt.subplots(1, 2, figsize=(12, 11), sharey=True)
+    for axis, metric, title, multiplier in zip(
+        axes, ("map50", "gt_coverage_percent"), ("mAP@0.5", "GT coverage"), (100, 1)
+    ):
+        before = [multiplier * groups["exp2"][model][metric] for model in models]
+        after = [multiplier * groups["exp2.5"][model][metric] for model in models]
+        axis.hlines(positions, before, after, color="#cbd5e1", linewidth=2)
+        axis.scatter(before, positions, label="Exp2", color="#2563eb", s=30, zorder=3)
+        axis.scatter(after, positions, label="Exp2.5", color="#ea580c", s=30, zorder=3)
+        axis.set(xlim=(0, 100), xlabel="Percent", title=title)
+        axis.grid(axis="x", alpha=0.2)
+        axis.legend(loc="lower left")
+    axes[0].set_yticks(positions)
+    axes[0].set_yticklabels(models)
+    axes[0].invert_yaxis()
+    figure.suptitle(
+        f"Exp3: {len(records):,} shared test images, {verification['gt_objects_per_checkpoint']:,} GT objects"
+    )
+    figure.tight_layout()
+    for suffix in ("png", "svg"):
+        figure.savefig(project / f"comparison.{suffix}", dpi=200, bbox_inches="tight")
+    plt.close(figure)
+    print(f"Verified all {len(rows)} reports; comparison figures saved in {project}", flush=True)
+
+
 def main() -> None:
     """Prepare the portable manifest dataset and run the smoke or full matrix on Rainbow GPU 1."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -90,6 +168,7 @@ def main() -> None:
     parser.set_defaults(datasetRoot=HERE / "inputs/images", preparedDir=HERE / "prepared/full", gtCoverage=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--smoke", action="store_true", help="Use four positive and four background images per split.")
+    parser.add_argument("--report-only", action="store_true", help="Verify and plot the completed full matrix.")
     parser.add_argument(
         "--start-index", type=int, default=0, help="Resume at this zero-based checkpoint inventory row."
     )
@@ -117,6 +196,9 @@ def main() -> None:
     args.imageSize, args.device, args.existOk, args.disablePlots = 640, "0", True, True
     args.project = args.output.resolve() / ("smoke" if args.smoke else "full")
     args.project.mkdir(parents=True, exist_ok=True)
+    if args.report_only:
+        finalReport(args.project, cases)
+        return
     dataYaml, statistics = prepareDataset(args)
     if args.prepareOnly:
         return
@@ -181,6 +263,8 @@ def main() -> None:
     rows = summarize(args.project, cases)
     if len(rows) != len(cases):
         raise RuntimeError(f"Only {len(rows)}/{len(cases)} checkpoints have results")
+    if not args.smoke:
+        finalReport(args.project, cases)
     print(f"COMPLETE: {len(rows)} checkpoints; {args.project / 'results.md'}", flush=True)
 
 

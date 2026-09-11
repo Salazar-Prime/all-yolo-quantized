@@ -18,6 +18,12 @@ mirror at `/home/varun/work/all-yolo-quantized` on **Rainbow**, physical GPU **1
 - mAP@0.5 is recomputed in the same validator pass, using its normal low-confidence floor and external NMS defaults.
   It is not copied from the earlier experiments, whose evaluation image selections differed.
 
+The current fork's default `nms=None` selects the one-to-many head with external NMS for dual-head YOLO26 and YOLOv10
+checkpoints. The archived training source preserved their native end-to-end mode by default. This inference-head
+difference means the new YOLO26/YOLOv10 mAP values are not exact reproductions of the archived scores. Every row in this
+experiment uses the same current-fork validation policy, with NMS IoU 0.7, at most 300 detections per image, and confidence
+floor 0.001 for mAP. The separate GT metric then applies its 0.25 confidence cutoff and strict 0.5 matching IoU cutoff.
+
 ## Files
 
 ```text
@@ -36,6 +42,9 @@ exp3/
     evaluation.log               full test evaluation progress
     full/results.csv             mAP@0.5, GT coverage, counts, hashes, and elapsed time
     full/results.md              all models in one comparison table
+    full/comparison.png          paired mAP@0.5 and GT coverage chart
+    full/comparison.svg          vector version of the comparison chart
+    full/verification.json       per-image UUID and aggregate-count verification
     full/exp2*/<model>/
       metrics.json               standard metrics and GT coverage scalars
       gt_coverage.json           detected/missed UUIDs and extra prediction boxes
@@ -60,6 +69,16 @@ The launcher first checks every checkpoint's SHA-256 and runs all 56 models on e
 starts only after those checks succeed. It runs sequentially on GPU 1. Each completed model immediately saves its metrics,
 UUID report, and an updated comparison table. Environment versions, source revision, input hashes, and GPU identity are
 recorded in provenance files.
+
+The final report verifies that every original test image is present and that every GT UUID appears exactly once in its
+source image, as either detected or missed. Per-image counts must agree with the reported totals. It then generates a
+paired comparison chart showing Exp2 and Exp2.5 for every architecture. To regenerate only this report on Rainbow:
+
+```bash
+CUDA_VISIBLE_DEVICES=1 YOLO_CONFIG_DIR="$PWD/exp3/.cache/settings" \
+    MPLCONFIGDIR="$PWD/exp3/.cache/matplotlib" exp3/.venv/bin/python exp3/run.py \
+    --manifest exp3/dataset.json --output exp3/runs/exp3-20260911 --report-only
+```
 
 After an interrupted evaluation, use `run.py --start-index N` with the same output directory and fixed protocol to resume
 at the first unfinished row of `checkpoints.csv`. The row index is printed before each checkpoint is evaluated.
