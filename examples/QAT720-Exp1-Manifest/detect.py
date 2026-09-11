@@ -32,7 +32,7 @@ def main() -> None:
     """Prepare the requested split and run prediction on its image directory."""
     args = parseArguments()
     dataYaml, statistics = prepareDataset(args)
-    print("Ultralytics data config: {}".format(dataYaml))
+    print(f"Ultralytics data config: {dataYaml}")
     printStatistics(statistics, args.objectSize, args.skipEmptyImages)
     if args.prepareOnly:
         print("Preparation-only mode: no model was loaded and no detection was started.")
@@ -41,7 +41,7 @@ def main() -> None:
     from ultralytics import YOLO
 
     source = dataYaml.parent / "images" / args.split
-    runName = args.name or "{}_exp1_{}".format(Path(args.model).stem, args.split)
+    runName = args.name or f"{Path(args.model).stem}_exp1_{args.split}"
     predictArguments = {
         "source": str(source),
         "imgsz": args.imageSize,
@@ -59,7 +59,7 @@ def main() -> None:
     if args.device is not None:
         predictArguments["device"] = args.device
     results = YOLO(args.model).predict(**predictArguments)
-    print("Processed {} images from {} split.".format(len(results), args.split))
+    print(f"Processed {len(results)} images from {args.split} split.")
 
 
 if __name__ == "__main__":

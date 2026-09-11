@@ -1,6 +1,8 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 """Prepare Exp1 manifest data and run a YOLO train/validation/test experiment."""
 
+from __future__ import annotations
+
 import argparse
 import hashlib
 import json
@@ -9,10 +11,9 @@ import os
 import shutil
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Sequence
 
 from splitDatasetManifests import loadMetadata, splitRecords, validateRatios
-
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SPLIT_NAMES = ("train", "val", "test")
@@ -28,13 +29,11 @@ SIZE_ALIASES = {
 PREPARATION_MARKER = ".manifestPreparation.json"
 
 
-def normalizeObjectSize(value: str) -> Optional[str]:
+def normalizeObjectSize(value: str) -> str | None:
     """Return the canonical COCO size name selected on the command line."""
     normalized = SIZE_ALIASES.get(value.strip().lower())
     if value.strip().lower() not in SIZE_ALIASES:
-        raise argparse.ArgumentTypeError(
-            "object size must be one of: all, small/S, medium/M, large/L"
-        )
+        raise argparse.ArgumentTypeError("object size must be one of: all, small/S, medium/M, large/L")
     return normalized
 
 
@@ -43,9 +42,7 @@ def loadJson(path: Path):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as error:
-        raise ValueError(
-            "Manifest is not valid JSON: {} ({})".format(path, error)
-        )
+        raise ValueError(f"Manifest is not valid JSON: {path} ({error})")
 
 
 def loadReferencedSplit(value, splitName: str, manifestPath: Path):
@@ -59,57 +56,39 @@ def loadReferencedSplit(value, splitName: str, manifestPath: Path):
             sourcePath = manifestPath.parent / sourcePath
         sourcePath = sourcePath.resolve()
         if not sourcePath.is_file():
-            raise FileNotFoundError(
-                "{} manifest does not exist: {}".format(splitName, sourcePath)
-            )
+            raise FileNotFoundError(f"{splitName} manifest does not exist: {sourcePath}")
         records = loadMetadata(sourcePath)
     else:
-        raise ValueError(
-            "{} split must be a list of records or a manifest path".format(splitName)
-        )
+        raise ValueError(f"{splitName} split must be a list of records or a manifest path")
 
-    validateRecords(records, "{} split".format(splitName))
+    validateRecords(records, f"{splitName} split")
     return records, sourcePath
 
 
 def validateRecords(records, description: str) -> None:
     """Validate the image-record structure needed by this training adapter."""
     if not isinstance(records, list):
-        raise ValueError("{} must contain a JSON list".format(description))
+        raise TypeError(f"{description} must contain a JSON list")
 
     seenPaths = set()
     for index, record in enumerate(records):
         if not isinstance(record, dict):
-            raise ValueError(
-                "{} record {} is not a JSON object".format(description, index)
-            )
+            raise TypeError(f"{description} record {index} is not a JSON object")
         filePath = record.get("filePath")
         fileName = record.get("fileName")
-        if (not isinstance(filePath, str) or not filePath) and (
-            not isinstance(fileName, str) or not fileName
-        ):
-            raise ValueError(
-                "{} record {} has no valid filePath or fileName".format(
-                    description, index
-                )
-            )
+        if (not isinstance(filePath, str) or not filePath) and (not isinstance(fileName, str) or not fileName):
+            raise ValueError(f"{description} record {index} has no valid filePath or fileName")
         identity = filePath or fileName
         if identity in seenPaths:
-            raise ValueError(
-                "Duplicate image in {}: {}".format(description, identity)
-            )
+            raise ValueError(f"Duplicate image in {description}: {identity}")
         seenPaths.add(identity)
 
         objects = record.get("objects", [])
         if not isinstance(objects, list):
-            raise ValueError(
-                "{} record {} has a non-list objects value".format(
-                    description, index
-                )
-            )
+            raise TypeError(f"{description} record {index} has a non-list objects value")
 
 
-def extractConfiguredClassNames(payload) -> Optional[List[str]]:
+def extractConfiguredClassNames(payload) -> list[str] | None:
     """Read class names from supported manifest/config shapes."""
     if not isinstance(payload, dict):
         return None
@@ -121,9 +100,7 @@ def extractConfiguredClassNames(payload) -> Optional[List[str]]:
             names = [names[str(index)] for index in range(len(names))]
         except KeyError:
             return None
-    if isinstance(names, list) and all(
-        isinstance(name, str) and name for name in names
-    ):
+    if isinstance(names, list) and all(isinstance(name, str) and name for name in names):
         return names
     return None
 
@@ -132,7 +109,7 @@ def loadDatasetSplits(
     manifestPath: Path,
     splitSeed: int,
     splitRatios: Sequence[float],
-) -> Tuple[Dict[str, List[dict]], Optional[List[str]], List[Path], str]:
+) -> tuple[dict[str, list[dict]], list[str] | None, list[Path], str]:
     """Load explicit splits or split one combined image-record manifest."""
     payload = loadJson(manifestPath)
     configuredNames = extractConfiguredClassNames(payload)
@@ -142,9 +119,7 @@ def loadDatasetSplits(
         validateRecords(payload, "combined manifest")
         ratios = validateRatios(splitRatios)
         if any(value <= 0 for value in ratios):
-            raise ValueError(
-                "Train, validation, and test ratios must all be greater than zero"
-            )
+            raise ValueError("Train, validation, and test ratios must all be greater than zero")
         splits = splitRecords(payload, splitSeed, ratios)
         inputMode = "combined"
     elif isinstance(payload, dict):
@@ -152,56 +127,44 @@ def loadDatasetSplits(
         if splitMapping is None:
             splitMapping = payload.get("manifests")
         if not isinstance(splitMapping, dict):
-            raise ValueError(
-                "JSON object input must contain a 'splits' or 'manifests' mapping"
-            )
+            raise TypeError("JSON object input must contain a 'splits' or 'manifests' mapping")
 
         splits = {}
         for splitName in SPLIT_NAMES:
             if splitName not in splitMapping:
-                raise ValueError(
-                    "Input manifest has no '{}' split".format(splitName)
-                )
-            records, sourcePath = loadReferencedSplit(
-                splitMapping[splitName], splitName, manifestPath
-            )
+                raise ValueError(f"Input manifest has no '{splitName}' split")
+            records, sourcePath = loadReferencedSplit(splitMapping[splitName], splitName, manifestPath)
             splits[splitName] = records
             if sourcePath is not None:
                 sourcePaths.append(sourcePath)
         inputMode = "explicit"
     else:
-        raise ValueError(
-            "Input must be a combined JSON list or an object with split manifests"
-        )
+        raise TypeError("Input must be a combined JSON list or an object with split manifests")
 
     validateSplitMembership(splits)
     return splits, configuredNames, sourcePaths, inputMode
 
 
-def validateSplitMembership(splits: Dict[str, List[dict]]) -> None:
+def validateSplitMembership(splits: dict[str, list[dict]]) -> None:
     """Require nonempty, mutually disjoint train/validation/test splits."""
     seen = {}
     for splitName in SPLIT_NAMES:
         records = splits[splitName]
         if not records:
-            raise ValueError("{} split is empty".format(splitName))
+            raise ValueError(f"{splitName} split is empty")
         for record in records:
             identity = record.get("filePath") or record.get("fileName")
             previousSplit = seen.get(identity)
             if previousSplit is not None:
-                raise ValueError(
-                    "Image occurs in both {} and {} splits: {}".format(
-                        previousSplit, splitName, identity
-                    )
-                )
+                raise ValueError(f"Image occurs in both {previousSplit} and {splitName} splits: {identity}")
             seen[identity] = splitName
 
 
 def inferClassNames(
-    splits: Dict[str, List[dict]],
-    requestedNames: Optional[Sequence[str]],
-    configuredNames: Optional[Sequence[str]],
-) -> List[str]:
+    splits: dict[str, list[dict]],
+    requestedNames: Sequence[str] | None,
+    configuredNames: Sequence[str] | None,
+) -> list[str]:
     """Choose class names and verify every class ID can be represented."""
     classIds = set()
     for records in splits.values():
@@ -215,11 +178,10 @@ def inferClassNames(
 
     names = list(requestedNames or configuredNames or [])
     if not names:
-        names = ["class_{}".format(index) for index in range(max(classIds) + 1)]
+        names = [f"class_{index}" for index in range(max(classIds) + 1)]
     if max(classIds) >= len(names):
         raise ValueError(
-            "Manifest class ID {} requires at least {} class names, but {} were "
-            "provided".format(max(classIds), max(classIds) + 1, len(names))
+            f"Manifest class ID {max(classIds)} requires at least {max(classIds) + 1} class names, but {len(names)} were provided"
         )
     return names
 
@@ -228,7 +190,7 @@ def parseClassId(obj: dict) -> int:
     """Return a validated nonnegative integer class ID."""
     value = obj.get("classId")
     if isinstance(value, bool):
-        raise ValueError("Object classId must be a nonnegative integer")
+        raise TypeError("Object classId must be a nonnegative integer")
     try:
         classId = int(value)
     except (TypeError, ValueError):
@@ -246,21 +208,19 @@ def yoloLabelLine(obj: dict) -> str:
         try:
             value = float(obj.get(key))
         except (TypeError, ValueError):
-            raise ValueError("Object {} must be numeric".format(key))
+            raise ValueError(f"Object {key} must be numeric")
         if not math.isfinite(value):
-            raise ValueError("Object {} must be finite".format(key))
+            raise ValueError(f"Object {key} must be finite")
         if key in ("boxWidth", "boxHeight"):
             if value <= 0 or value > 1:
-                raise ValueError("Object {} must be in (0, 1]".format(key))
+                raise ValueError(f"Object {key} must be in (0, 1]")
         elif value < 0 or value > 1:
-            raise ValueError("Object {} must be in [0, 1]".format(key))
+            raise ValueError(f"Object {key} must be in [0, 1]")
         values.append(value)
-    return "{} {} {} {} {}\n".format(
-        classId, *(format(value, ".10g") for value in values)
-    )
+    return "{} {} {} {} {}\n".format(classId, *(format(value, ".10g") for value in values))
 
 
-def selectObjects(objects: Sequence[dict], objectSize: Optional[str]) -> List[dict]:
+def selectObjects(objects: Sequence[dict], objectSize: str | None) -> list[dict]:
     """Return all objects or only objects in one canonical COCO size category."""
     if objectSize is None:
         return list(objects)
@@ -274,18 +234,13 @@ def selectObjects(objects: Sequence[dict], objectSize: Optional[str]) -> List[di
             "medium",
             "large",
         ):
-            raise ValueError(
-                "Every object must have a valid cocoSizeCategory when "
-                "--object-size is used"
-            )
+            raise ValueError("Every object must have a valid cocoSizeCategory when --object-size is used")
         if normalizedCategory == objectSize:
             selected.append(obj)
     return selected
 
 
-def resolveImagePath(
-    record: dict, datasetRoot: Optional[Path], manifestPath: Path
-) -> Path:
+def resolveImagePath(record: dict, datasetRoot: Path | None, manifestPath: Path) -> Path:
     """Resolve a record image, allowing an explicit root to replace stale paths."""
     filePathValue = record.get("filePath")
     fileNameValue = record.get("fileName")
@@ -312,8 +267,8 @@ def resolveImagePath(
             return resolved
 
     raise FileNotFoundError(
-        "Image from manifest record was not found (filePath={!r}, fileName={!r}); "
-        "use --dataset-root if the dataset moved".format(filePathValue, fileNameValue)
+        f"Image from manifest record was not found (filePath={filePathValue!r}, fileName={fileNameValue!r}); "
+        "use --dataset-root if the dataset moved"
     )
 
 
@@ -334,18 +289,17 @@ def preparationSignature(
     inputMode: str,
     splitSeed: int,
     splitRatios: Sequence[float],
-    objectSize: Optional[str],
+    objectSize: str | None,
     skipEmptyImages: bool,
-    datasetRoot: Optional[Path],
+    datasetRoot: Path | None,
     classNames: Sequence[str],
-) -> Tuple[str, dict]:
+) -> tuple[str, dict]:
     """Build the reproducibility metadata and its stable signature."""
     specification = {
         "formatVersion": 2,
         "inputMode": inputMode,
         "sourceManifests": [
-            {"path": str(path), "sha256": hashFile(path)}
-            for path in sorted(set(sourcePaths), key=str)
+            {"path": str(path), "sha256": hashFile(path)} for path in sorted(set(sourcePaths), key=str)
         ],
         "splitSeed": splitSeed if inputMode == "combined" else None,
         "splitRatios": list(splitRatios) if inputMode == "combined" else None,
@@ -354,45 +308,36 @@ def preparationSignature(
         "datasetRoot": str(datasetRoot) if datasetRoot is not None else None,
         "classNames": list(classNames),
     }
-    encoded = json.dumps(
-        specification, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
+    encoded = json.dumps(specification, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest(), specification
 
 
-def writeDataYaml(
-    path: Path, datasetPath: Path, classNames: Sequence[str]
-) -> None:
+def writeDataYaml(path: Path, datasetPath: Path, classNames: Sequence[str]) -> None:
     """Write the standard Ultralytics detection dataset configuration."""
     lines = [
-        "path: {}".format(json.dumps(str(datasetPath.resolve()))),
+        f"path: {json.dumps(str(datasetPath.resolve()))}",
         "train: images/train",
         "val: images/val",
         "test: images/test",
         "names:",
     ]
-    lines.extend(
-        "  {}: {}".format(index, json.dumps(name))
-        for index, name in enumerate(classNames)
-    )
+    lines.extend(f"  {index}: {json.dumps(name)}" for index, name in enumerate(classNames))
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def buildPreparedDataset(
     outputPath: Path,
-    splits: Dict[str, List[dict]],
+    splits: dict[str, list[dict]],
     manifestPath: Path,
-    datasetRoot: Optional[Path],
-    objectSize: Optional[str],
+    datasetRoot: Path | None,
+    objectSize: str | None,
     skipEmptyImages: bool,
     classNames: Sequence[str],
     signature: str,
     specification: dict,
 ) -> dict:
     """Build a lightweight Ultralytics dataset using symlinked images."""
-    temporaryPath = outputPath.with_name(
-        ".{}.tmp-{}".format(outputPath.name, uuid.uuid4().hex)
-    )
+    temporaryPath = outputPath.with_name(f".{outputPath.name}.tmp-{uuid.uuid4().hex}")
     statistics = {}
 
     try:
@@ -415,7 +360,7 @@ def buildPreparedDataset(
                     continue
 
                 imagePath = resolveImagePath(record, datasetRoot, manifestPath)
-                outputStem = "{:08d}_{}".format(recordIndex, imagePath.stem)
+                outputStem = f"{recordIndex:08d}_{imagePath.stem}"
                 outputImagePath = imageDir / (outputStem + imagePath.suffix)
                 outputLabelPath = labelDir / (outputStem + ".txt")
                 outputImagePath.symlink_to(imagePath)
@@ -427,13 +372,9 @@ def buildPreparedDataset(
                 loadedObjects += len(selectedObjects)
 
             if loadedImages == 0:
-                raise ValueError(
-                    "{} split has no images after filtering".format(splitName)
-                )
+                raise ValueError(f"{splitName} split has no images after filtering")
             if loadedObjects == 0:
-                raise ValueError(
-                    "{} split has no objects after filtering".format(splitName)
-                )
+                raise ValueError(f"{splitName} split has no objects after filtering")
             statistics[splitName] = {
                 "images": loadedImages,
                 "objects": loadedObjects,
@@ -459,26 +400,18 @@ def buildPreparedDataset(
     return statistics
 
 
-def prepareDataset(args) -> Tuple[Path, dict]:
+def prepareDataset(args) -> tuple[Path, dict]:
     """Load one manifest input and create or reuse its YOLO dataset view."""
     manifestPath = args.manifest.expanduser().resolve()
     if not manifestPath.is_file():
-        raise FileNotFoundError("Input manifest does not exist: {}".format(manifestPath))
+        raise FileNotFoundError(f"Input manifest does not exist: {manifestPath}")
 
-    datasetRoot = (
-        args.datasetRoot.expanduser().resolve()
-        if args.datasetRoot is not None
-        else None
-    )
+    datasetRoot = args.datasetRoot.expanduser().resolve() if args.datasetRoot is not None else None
     if datasetRoot is not None and not datasetRoot.is_dir():
-        raise NotADirectoryError(
-            "Dataset root does not exist: {}".format(datasetRoot)
-        )
+        raise NotADirectoryError(f"Dataset root does not exist: {datasetRoot}")
 
     splitRatios = validateRatios(args.splitRatios)
-    splits, configuredNames, sourcePaths, inputMode = loadDatasetSplits(
-        manifestPath, args.splitSeed, splitRatios
-    )
+    splits, configuredNames, sourcePaths, inputMode = loadDatasetSplits(manifestPath, args.splitSeed, splitRatios)
     classNames = inferClassNames(splits, args.classNames, configuredNames)
     signature, specification = preparationSignature(
         sourcePaths,
@@ -491,22 +424,14 @@ def prepareDataset(args) -> Tuple[Path, dict]:
         classNames,
     )
 
-    inputTag = (
-        "seed_{}".format(args.splitSeed) if inputMode == "combined" else "explicit"
-    )
+    inputTag = f"seed_{args.splitSeed}" if inputMode == "combined" else "explicit"
     preparedSelection = args.objectSize or "all"
     if args.skipEmptyImages:
         preparedSelection += "_skip_empty"
     outputPath = (
         args.preparedDir.expanduser().resolve()
         if args.preparedDir is not None
-        else (
-            SCRIPT_DIR
-            / "prepared"
-            / manifestPath.stem
-            / inputTag
-            / preparedSelection
-        )
+        else (SCRIPT_DIR / "prepared" / manifestPath.stem / inputTag / preparedSelection)
     )
     markerPath = outputPath / PREPARATION_MARKER
 
@@ -518,20 +443,19 @@ def prepareDataset(args) -> Tuple[Path, dict]:
             and (outputPath / "data.yaml").is_file()
             and not args.rebuildPrepared
         ):
-            print("Reusing prepared dataset: {}".format(outputPath))
+            print(f"Reusing prepared dataset: {outputPath}")
             return outputPath / "data.yaml", existingMarker["statistics"]
 
         if not args.rebuildPrepared:
             raise FileExistsError(
-                "Prepared directory exists but does not match this request: {}. "
-                "Use --rebuild-prepared to replace it.".format(outputPath)
+                f"Prepared directory exists but does not match this request: {outputPath}. "
+                "Use --rebuild-prepared to replace it."
             )
-        if not isinstance(existingMarker, dict) or existingMarker.get(
-            "generatedBy"
-        ) != "examples/QAT720-Exp1-Manifest/train.py":
-            raise ValueError(
-                "Refusing to replace an unrecognized directory: {}".format(outputPath)
-            )
+        if (
+            not isinstance(existingMarker, dict)
+            or existingMarker.get("generatedBy") != "examples/QAT720-Exp1-Manifest/train.py"
+        ):
+            raise ValueError(f"Refusing to replace an unrecognized directory: {outputPath}")
         shutil.rmtree(str(outputPath))
 
     outputPath.parent.mkdir(parents=True, exist_ok=True)
@@ -546,22 +470,18 @@ def prepareDataset(args) -> Tuple[Path, dict]:
         signature,
         specification,
     )
-    print("Prepared dataset: {}".format(outputPath))
+    print(f"Prepared dataset: {outputPath}")
     return outputPath / "data.yaml", statistics
 
 
 def printStatistics(
     statistics: dict,
-    objectSize: Optional[str],
+    objectSize: str | None,
     skipEmptyImages: bool,
 ) -> None:
     """Print the exact inputs that the three native dataloaders will receive."""
     print("Object size: {}".format(objectSize or "all"))
-    print(
-        "Skip empty images in train/val/test: {}".format(
-            "true" if skipEmptyImages else "false"
-        )
-    )
+    print("Skip empty images in train/val/test: {}".format("true" if skipEmptyImages else "false"))
     for splitName in SPLIT_NAMES:
         values = statistics[splitName]
         print(
@@ -579,13 +499,9 @@ def runExperiment(args, dataYaml: Path) -> None:
     try:
         from ultralytics import YOLO, settings
     except ImportError as error:
-        raise RuntimeError(
-            "Ultralytics dependencies are unavailable. Install this fork before training."
-        ) from error
+        raise RuntimeError("Ultralytics dependencies are unavailable. Install this fork before training.") from error
 
-    runName = args.name or "{}_{}_{}".format(
-        Path(args.model).stem, args.manifest.stem, args.objectSize or "all"
-    )
+    runName = args.name or "{}_{}_{}".format(Path(args.model).stem, args.manifest.stem, args.objectSize or "all")
     project = args.project.expanduser().resolve()
     wandbEnabled = args.wandbMode != "disabled"
     wandbModule = None
@@ -670,12 +586,8 @@ def runExperiment(args, dataYaml: Path) -> None:
     if args.device is not None:
         evaluationArguments["device"] = args.device
 
-    finalValidation = evaluationModel.val(
-        split="val", name=runName + "_final_val", **evaluationArguments
-    )
-    finalTest = evaluationModel.val(
-        split="test", name=runName + "_final_test", **evaluationArguments
-    )
+    finalValidation = evaluationModel.val(split="val", name=runName + "_final_val", **evaluationArguments)
+    finalTest = evaluationModel.val(split="test", name=runName + "_final_test", **evaluationArguments)
 
     if wandbModule is not None:
         finalRun = wandbModule.run
@@ -696,7 +608,7 @@ def runExperiment(args, dataYaml: Path) -> None:
         ):
             for key, value in metrics.results_dict.items():
                 try:
-                    finalMetrics["{}/{}".format(prefix, key)] = float(value)
+                    finalMetrics[f"{prefix}/{key}"] = float(value)
                 except (TypeError, ValueError):
                     continue
         finalRun.log(finalMetrics)
@@ -728,8 +640,7 @@ def addManifestArguments(parser: argparse.ArgumentParser) -> None:
         default=None,
         metavar="{all,small/S,medium/M,large/L}",
         help=(
-            "Load only objects in this COCO size category. Images without a "
-            "matching object are excluded. Default: all."
+            "Load only objects in this COCO size category. Images without a matching object are excluded. Default: all."
         ),
     )
     parser.add_argument(
@@ -737,10 +648,7 @@ def addManifestArguments(parser: argparse.ArgumentParser) -> None:
         dest="classNames",
         nargs="+",
         default=None,
-        help=(
-            "Class names in class-ID order. Defaults to names in a config input, "
-            "then class_0, class_1, etc."
-        ),
+        help=("Class names in class-ID order. Defaults to names in a config input, then class_0, class_1, etc."),
     )
     parser.add_argument(
         "--split-seed",
@@ -830,10 +738,7 @@ def parseArguments() -> argparse.Namespace:
         dest="wandbMode",
         choices=("offline", "online", "disabled"),
         default="offline",
-        help=(
-            "W&B logging mode. TensorBoard remains enabled in every mode. "
-            "Default: offline."
-        ),
+        help=("W&B logging mode. TensorBoard remains enabled in every mode. Default: offline."),
     )
     parser.add_argument(
         "--wandb-project",
@@ -853,7 +758,7 @@ def parseArguments() -> argparse.Namespace:
 def main() -> None:
     args = parseArguments()
     dataYaml, statistics = prepareDataset(args)
-    print("Ultralytics data config: {}".format(dataYaml))
+    print(f"Ultralytics data config: {dataYaml}")
     printStatistics(statistics, args.objectSize, args.skipEmptyImages)
     if args.prepareOnly:
         print("Preparation-only mode: no model was loaded and no training was started.")

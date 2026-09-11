@@ -17,7 +17,7 @@ def main() -> None:
     """Generate and summarize a symlink-backed Ultralytics dataset."""
     args = parseArguments()
     dataYaml, statistics = prepareDataset(args)
-    print("Ultralytics data config: {}".format(dataYaml))
+    print(f"Ultralytics data config: {dataYaml}")
     printStatistics(statistics, args.objectSize, args.skipEmptyImages)
 
 

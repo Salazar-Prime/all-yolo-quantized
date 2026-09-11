@@ -8,50 +8,45 @@ the input manifest as <manifestStem>Statistics.json and
 <manifestStem>Statistics.csv.
 """
 
+from __future__ import annotations
+
 import argparse
 import csv
 import json
 import math
 import statistics
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
-
+from typing import Sequence
 
 COCO_SMALL_AREA_MAX_PX2 = 32 * 32
 COCO_MEDIUM_AREA_MAX_PX2 = 96 * 96
 
 
-def loadManifest(manifestPath: Path) -> List[Dict[str, object]]:
+def loadManifest(manifestPath: Path) -> list[dict[str, object]]:
     try:
         payload = json.loads(manifestPath.read_text(encoding="utf-8"))
     except json.JSONDecodeError as error:
-        raise ValueError(
-            "Manifest is not valid JSON: {} ({})".format(manifestPath, error)
-        )
+        raise ValueError(f"Manifest is not valid JSON: {manifestPath} ({error})")
 
     if not isinstance(payload, list):
-        raise ValueError("Manifest must contain a JSON list of image records")
+        raise TypeError("Manifest must contain a JSON list of image records")
 
     records = []
     seenFilePaths = set()
     for index, record in enumerate(payload):
         if not isinstance(record, dict):
-            raise ValueError("Manifest record {} is not a JSON object".format(index))
+            raise TypeError(f"Manifest record {index} is not a JSON object")
 
         filePath = record.get("filePath")
         if not isinstance(filePath, str) or not filePath:
-            raise ValueError(
-                "Manifest record {} has no valid filePath".format(index)
-            )
+            raise ValueError(f"Manifest record {index} has no valid filePath")
         if filePath in seenFilePaths:
-            raise ValueError("Duplicate filePath in manifest: {}".format(filePath))
+            raise ValueError(f"Duplicate filePath in manifest: {filePath}")
 
         objects = record.get("objects")
         if not isinstance(objects, list):
-            raise ValueError(
-                "Manifest record {} has no valid objects list".format(index)
-            )
+            raise TypeError(f"Manifest record {index} has no valid objects list")
 
         seenFilePaths.add(filePath)
         records.append(record)
@@ -63,32 +58,30 @@ def requireFiniteNumber(value: object, fieldName: str) -> float:
     try:
         number = float(value)
     except (TypeError, ValueError):
-        raise ValueError("{} must be numeric, found {!r}".format(fieldName, value))
+        raise ValueError(f"{fieldName} must be numeric, found {value!r}")
     if not math.isfinite(number):
-        raise ValueError("{} must be finite, found {!r}".format(fieldName, value))
+        raise ValueError(f"{fieldName} must be finite, found {value!r}")
     return number
 
 
-def percentile(sortedValues: Sequence[float], fraction: float) -> Optional[float]:
+def percentile(sortedValues: Sequence[float], fraction: float) -> float | None:
     if not sortedValues:
         return None
     if len(sortedValues) == 1:
         return float(sortedValues[0])
 
     position = (len(sortedValues) - 1) * fraction
-    lowerIndex = int(math.floor(position))
-    upperIndex = int(math.ceil(position))
+    lowerIndex = math.floor(position)
+    upperIndex = math.ceil(position)
     if lowerIndex == upperIndex:
         return float(sortedValues[lowerIndex])
 
     lowerValue = sortedValues[lowerIndex]
     upperValue = sortedValues[upperIndex]
-    return float(
-        lowerValue + (upperValue - lowerValue) * (position - lowerIndex)
-    )
+    return float(lowerValue + (upperValue - lowerValue) * (position - lowerIndex))
 
 
-def summarizeValues(values: Sequence[float]) -> Dict[str, object]:
+def summarizeValues(values: Sequence[float]) -> dict[str, object]:
     if not values:
         return {
             "count": 0,
@@ -135,8 +128,8 @@ def cocoSizeCategory(areaPx2: float) -> str:
 def distributionPayload(
     counts: Counter,
     total: int,
-    orderedKeys: Optional[Sequence[object]] = None,
-) -> Dict[str, Dict[str, object]]:
+    orderedKeys: Sequence[object] | None = None,
+) -> dict[str, dict[str, object]]:
     keys = orderedKeys if orderedKeys is not None else sorted(counts, key=str)
     return {
         str(key): {
@@ -148,9 +141,9 @@ def distributionPayload(
 
 
 def buildManifestStatistics(
-    records: Sequence[Dict[str, object]],
-    manifestPath: Optional[Path] = None,
-) -> Dict[str, object]:
+    records: Sequence[dict[str, object]],
+    manifestPath: Path | None = None,
+) -> dict[str, object]:
     imageWidths = []
     imageHeights = []
     imageAspectRatios = []
@@ -176,16 +169,14 @@ def buildManifestStatistics(
     for recordIndex, record in enumerate(records):
         imageWidth = requireFiniteNumber(
             record.get("imageWidth"),
-            "record[{}].imageWidth".format(recordIndex),
+            f"record[{recordIndex}].imageWidth",
         )
         imageHeight = requireFiniteNumber(
             record.get("imageHeight"),
-            "record[{}].imageHeight".format(recordIndex),
+            f"record[{recordIndex}].imageHeight",
         )
         if imageWidth <= 0 or imageHeight <= 0:
-            raise ValueError(
-                "Image dimensions must be positive for {}".format(record["filePath"])
-            )
+            raise ValueError("Image dimensions must be positive for {}".format(record["filePath"]))
 
         objects = record["objects"]
         objectCount = len(objects)
@@ -207,17 +198,14 @@ def buildManifestStatistics(
 
         for objectIndex, objectRecord in enumerate(objects):
             if not isinstance(objectRecord, dict):
-                raise ValueError(
+                raise TypeError(
                     "Object {} in {} is not a JSON object".format(
                         objectIndex,
                         record["filePath"],
                     )
                 )
 
-            fieldPrefix = "record[{}].objects[{}]".format(
-                recordIndex,
-                objectIndex,
-            )
+            fieldPrefix = f"record[{recordIndex}].objects[{objectIndex}]"
             widthPx = requireFiniteNumber(
                 objectRecord.get("widthPx"),
                 fieldPrefix + ".widthPx",
@@ -239,21 +227,13 @@ def buildManifestStatistics(
                 fieldPrefix + ".boxHeight",
             )
             if widthPx <= 0 or heightPx <= 0 or areaPx2 <= 0:
-                raise ValueError(
-                    "Pixel box dimensions and area must be positive for {}".format(
-                        fieldPrefix
-                    )
-                )
+                raise ValueError(f"Pixel box dimensions and area must be positive for {fieldPrefix}")
             if widthNormalized <= 0 or heightNormalized <= 0:
-                raise ValueError(
-                    "Normalized box dimensions must be positive for {}".format(
-                        fieldPrefix
-                    )
-                )
+                raise ValueError(f"Normalized box dimensions must be positive for {fieldPrefix}")
 
             classId = objectRecord.get("classId")
             if classId is None:
-                raise ValueError("{} has no classId".format(fieldPrefix))
+                raise ValueError(f"{fieldPrefix} has no classId")
 
             derivedCategory = cocoSizeCategory(areaPx2)
             storedCategory = objectRecord.get("cocoSizeCategory")
@@ -286,9 +266,7 @@ def buildManifestStatistics(
     }
 
     payload = {
-        "sourceManifest": (
-            str(manifestPath.resolve()) if manifestPath is not None else None
-        ),
+        "sourceManifest": (str(manifestPath.resolve()) if manifestPath is not None else None),
         "images": {
             "total": numberOfImages,
             "withObjects": imagesWithObjects,
@@ -304,8 +282,7 @@ def buildManifestStatistics(
             "aspectRatio": summarizeValues(imageAspectRatios),
             "objectsPerImage": summarizeValues(objectsPerImage),
             "objectCountFrequency": {
-                str(key): int(objectsPerImageFrequency[key])
-                for key in sorted(objectsPerImageFrequency)
+                str(key): int(objectsPerImageFrequency[key]) for key in sorted(objectsPerImageFrequency)
             },
         },
         "objects": {
@@ -352,16 +329,16 @@ def writeJsonAtomically(outputPath: Path, payload: object) -> None:
 
 
 def flattenStatistics(
-    payload: Dict[str, object],
+    payload: dict[str, object],
     prefix: str = "",
-) -> Dict[str, object]:
+) -> dict[str, object]:
     """
     Flatten nested statistics into dot-delimited metric names for tabular output.
     """
     flattened = {}
     for key in sorted(payload):
         value = payload[key]
-        metricName = "{}.{}".format(prefix, key) if prefix else str(key)
+        metricName = f"{prefix}.{key}" if prefix else str(key)
         if isinstance(value, dict):
             flattened.update(flattenStatistics(value, metricName))
         elif isinstance(value, list):
@@ -373,7 +350,7 @@ def flattenStatistics(
 
 def writeStatisticsCsv(
     outputPath: Path,
-    statisticsByColumn: Dict[str, Dict[str, object]],
+    statisticsByColumn: dict[str, dict[str, object]],
     columnOrder: Sequence[str],
 ) -> Path:
     """
@@ -383,27 +360,12 @@ def writeStatisticsCsv(
     columns. The union of all metric names is written so split-specific plot or
     class keys are not lost.
     """
-    missingColumns = [
-        columnName
-        for columnName in columnOrder
-        if columnName not in statisticsByColumn
-    ]
+    missingColumns = [columnName for columnName in columnOrder if columnName not in statisticsByColumn]
     if missingColumns:
-        raise ValueError(
-            "Missing statistics columns: {}".format(", ".join(missingColumns))
-        )
+        raise ValueError("Missing statistics columns: {}".format(", ".join(missingColumns)))
 
-    flattenedByColumn = {
-        columnName: flattenStatistics(statisticsByColumn[columnName])
-        for columnName in columnOrder
-    }
-    metricNames = sorted(
-        {
-            metricName
-            for flattened in flattenedByColumn.values()
-            for metricName in flattened
-        }
-    )
+    flattenedByColumn = {columnName: flattenStatistics(statisticsByColumn[columnName]) for columnName in columnOrder}
+    metricNames = sorted({metricName for flattened in flattenedByColumn.values() for metricName in flattened})
 
     outputPath = outputPath.expanduser().resolve()
     outputPath.parent.mkdir(parents=True, exist_ok=True)
@@ -432,16 +394,14 @@ def writeStatisticsCsv(
 
 def createManifestStatistics(
     manifestPath: Path,
-    outputPath: Optional[Path] = None,
+    outputPath: Path | None = None,
 ) -> Path:
     manifestPath = manifestPath.expanduser().resolve()
     if not manifestPath.is_file():
-        raise FileNotFoundError("Manifest does not exist: {}".format(manifestPath))
+        raise FileNotFoundError(f"Manifest does not exist: {manifestPath}")
 
     resolvedOutputPath = (
-        outputPath.expanduser().resolve()
-        if outputPath is not None
-        else defaultStatisticsPath(manifestPath)
+        outputPath.expanduser().resolve() if outputPath is not None else defaultStatisticsPath(manifestPath)
     )
     records = loadManifest(manifestPath)
     payload = buildManifestStatistics(records, manifestPath)
@@ -476,9 +436,7 @@ def main() -> None:
     writtenPath = createManifestStatistics(args.manifestPath, args.outputPath)
     payload = json.loads(writtenPath.read_text(encoding="utf-8"))
     csvOutputPath = (
-        args.csvOutputPath.expanduser().resolve()
-        if args.csvOutputPath is not None
-        else writtenPath.with_suffix(".csv")
+        args.csvOutputPath.expanduser().resolve() if args.csvOutputPath is not None else writtenPath.with_suffix(".csv")
     )
     writtenCsvPath = writeStatisticsCsv(
         csvOutputPath,
@@ -486,8 +444,8 @@ def main() -> None:
         ("manifest",),
     )
 
-    print("Statistics written to: {}".format(writtenPath))
-    print("CSV statistics written to: {}".format(writtenCsvPath))
+    print(f"Statistics written to: {writtenPath}")
+    print(f"CSV statistics written to: {writtenCsvPath}")
     print("Images: {}".format(payload["images"]["total"]))
     print("Objects: {}".format(payload["objects"]["total"]))
     cocoDistribution = payload["objects"]["cocoSizeDistribution"]

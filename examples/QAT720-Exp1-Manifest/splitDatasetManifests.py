@@ -13,15 +13,16 @@ to exactly one split. Detailed JSON statistics are generated for every split,
 along with one combined manifestStatistics.csv comparison table.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import math
 import random
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple
+from typing import Sequence
 
 from manifestStatistics import createManifestStatistics, writeStatisticsCsv
-
 
 DEFAULT_DATASET_PATH = Path(".")
 DEFAULT_RATIOS = (30.0, 20.0, 50.0)
@@ -33,7 +34,7 @@ MANIFEST_FILENAMES = {
 }
 
 
-def validateRatios(ratios: Sequence[float]) -> Tuple[float, float, float]:
+def validateRatios(ratios: Sequence[float]) -> tuple[float, float, float]:
     if len(ratios) != 3:
         raise ValueError("Exactly three ratios are required: train val test")
 
@@ -50,7 +51,7 @@ def validateRatios(ratios: Sequence[float]) -> Tuple[float, float, float]:
 def allocateSplitCounts(
     numberOfRecords: int,
     ratios: Sequence[float],
-) -> Tuple[int, int, int]:
+) -> tuple[int, int, int]:
     """
     Convert ratio weights into exact integer counts using largest remainders.
 
@@ -60,10 +61,8 @@ def allocateSplitCounts(
     trainRatio, valRatio, testRatio = validateRatios(ratios)
     ratioValues = (trainRatio, valRatio, testRatio)
     ratioTotal = sum(ratioValues)
-    exactCounts = [
-        numberOfRecords * ratioValue / ratioTotal for ratioValue in ratioValues
-    ]
-    counts = [int(math.floor(value)) for value in exactCounts]
+    exactCounts = [numberOfRecords * ratioValue / ratioTotal for ratioValue in ratioValues]
+    counts = [math.floor(value) for value in exactCounts]
     remaining = numberOfRecords - sum(counts)
 
     remainderOrder = sorted(
@@ -76,30 +75,26 @@ def allocateSplitCounts(
     return counts[0], counts[1], counts[2]
 
 
-def loadMetadata(metadataPath: Path) -> List[Dict[str, object]]:
+def loadMetadata(metadataPath: Path) -> list[dict[str, object]]:
     try:
         payload = json.loads(metadataPath.read_text(encoding="utf-8"))
     except json.JSONDecodeError as error:
-        raise ValueError(
-            "Input manifest is not valid JSON: {} ({})".format(metadataPath, error)
-        )
+        raise ValueError(f"Input manifest is not valid JSON: {metadataPath} ({error})")
 
     if not isinstance(payload, list):
-        raise ValueError("Input manifest must contain a JSON list of image records")
+        raise TypeError("Input manifest must contain a JSON list of image records")
 
     records = []
     seenFilePaths = set()
     for index, record in enumerate(payload):
         if not isinstance(record, dict):
-            raise ValueError("Manifest record {} is not a JSON object".format(index))
+            raise TypeError(f"Manifest record {index} is not a JSON object")
 
         filePath = record.get("filePath")
         if not isinstance(filePath, str) or not filePath:
-            raise ValueError(
-                "Manifest record {} has no valid filePath".format(index)
-            )
+            raise ValueError(f"Manifest record {index} has no valid filePath")
         if filePath in seenFilePaths:
-            raise ValueError("Duplicate filePath in input manifest: {}".format(filePath))
+            raise ValueError(f"Duplicate filePath in input manifest: {filePath}")
 
         seenFilePaths.add(filePath)
         records.append(record)
@@ -108,10 +103,10 @@ def loadMetadata(metadataPath: Path) -> List[Dict[str, object]]:
 
 
 def splitRecords(
-    records: Sequence[Dict[str, object]],
+    records: Sequence[dict[str, object]],
     seed: int,
     ratios: Sequence[float],
-) -> Dict[str, List[Dict[str, object]]]:
+) -> dict[str, list[dict[str, object]]]:
     """
     Return deterministic, disjoint train/val/test record lists.
 
@@ -143,17 +138,14 @@ def splitRecords(
 
 
 def validateSplits(
-    inputRecords: Sequence[Dict[str, object]],
-    splitRecordsByName: Dict[str, List[Dict[str, object]]],
+    inputRecords: Sequence[dict[str, object]],
+    splitRecordsByName: dict[str, list[dict[str, object]]],
 ) -> None:
     inputPaths = {str(record["filePath"]) for record in inputRecords}
     outputPaths = set()
 
     for splitName in SPLIT_NAMES:
-        splitPaths = {
-            str(record["filePath"])
-            for record in splitRecordsByName[splitName]
-        }
+        splitPaths = {str(record["filePath"]) for record in splitRecordsByName[splitName]}
         if outputPaths.intersection(splitPaths):
             raise RuntimeError("The generated splits are not disjoint")
         outputPaths.update(splitPaths)
@@ -162,15 +154,14 @@ def validateSplits(
         missingCount = len(inputPaths - outputPaths)
         unexpectedCount = len(outputPaths - inputPaths)
         raise RuntimeError(
-            "The generated splits do not match the input "
-            "(missing={}, unexpected={})".format(missingCount, unexpectedCount)
+            f"The generated splits do not match the input (missing={missingCount}, unexpected={unexpectedCount})"
         )
 
 
 def writeManifestsAtomically(
     outputDir: Path,
-    splitRecordsByName: Dict[str, List[Dict[str, object]]],
-) -> Dict[str, Path]:
+    splitRecordsByName: dict[str, list[dict[str, object]]],
+) -> dict[str, Path]:
     outputDir.mkdir(parents=True, exist_ok=True)
     temporaryPaths = {}
     finalPaths = {}
@@ -196,14 +187,12 @@ def writeManifestsAtomically(
     return finalPaths
 
 
-def countObjects(records: Sequence[Dict[str, object]]) -> int:
+def countObjects(records: Sequence[dict[str, object]]) -> int:
     objectCount = 0
     for record in records:
         objects = record.get("objects", [])
         if not isinstance(objects, list):
-            raise ValueError(
-                "Record {} has an invalid objects value".format(record["filePath"])
-            )
+            raise TypeError("Record {} has an invalid objects value".format(record["filePath"]))
         objectCount += len(objects)
     return objectCount
 
@@ -219,7 +208,7 @@ def parseArguments() -> argparse.Namespace:
         "--datasetPath",
         type=Path,
         default=DEFAULT_DATASET_PATH,
-        help="Dataset root. Default: {}".format(DEFAULT_DATASET_PATH),
+        help=f"Dataset root. Default: {DEFAULT_DATASET_PATH}",
     )
     parser.add_argument(
         "--metadataPath",
@@ -255,32 +244,22 @@ def main() -> None:
     outputDir = (
         args.outputDir.expanduser().resolve()
         if args.outputDir is not None
-        else datasetPath / "manifests" / "seed_{}".format(args.seed)
+        else datasetPath / "manifests" / f"seed_{args.seed}"
     )
     ratios = validateRatios(args.ratios)
 
     if not datasetPath.is_dir():
-        raise NotADirectoryError(
-            "Dataset directory does not exist: {}".format(datasetPath)
-        )
+        raise NotADirectoryError(f"Dataset directory does not exist: {datasetPath}")
     if not metadataPath.is_file():
-        raise FileNotFoundError(
-            "Input metadata manifest does not exist: {}".format(metadataPath)
-        )
+        raise FileNotFoundError(f"Input metadata manifest does not exist: {metadataPath}")
 
     records = loadMetadata(metadataPath)
     splits = splitRecords(records, args.seed, ratios)
     validateSplits(records, splits)
     writtenPaths = writeManifestsAtomically(outputDir, splits)
-    statisticsPaths = {
-        splitName: createManifestStatistics(writtenPaths[splitName])
-        for splitName in SPLIT_NAMES
-    }
+    statisticsPaths = {splitName: createManifestStatistics(writtenPaths[splitName]) for splitName in SPLIT_NAMES}
     statisticsPayloads = {
-        splitName: json.loads(
-            statisticsPaths[splitName].read_text(encoding="utf-8")
-        )
-        for splitName in SPLIT_NAMES
+        splitName: json.loads(statisticsPaths[splitName].read_text(encoding="utf-8")) for splitName in SPLIT_NAMES
     }
     combinedStatisticsCsvPath = writeStatisticsCsv(
         outputDir / "manifestStatistics.csv",
@@ -288,16 +267,10 @@ def main() -> None:
         SPLIT_NAMES,
     )
 
-    print("Input manifest: {}".format(metadataPath))
-    print("Split seed: {}".format(args.seed))
-    print(
-        "Requested train:val:test ratio: {:g}:{:g}:{:g}".format(
-            ratios[0],
-            ratios[1],
-            ratios[2],
-        )
-    )
-    print("Output directory: {}".format(outputDir))
+    print(f"Input manifest: {metadataPath}")
+    print(f"Split seed: {args.seed}")
+    print(f"Requested train:val:test ratio: {ratios[0]:g}:{ratios[1]:g}:{ratios[2]:g}")
+    print(f"Output directory: {outputDir}")
 
     totalImages = len(records)
     totalObjects = countObjects(records)
@@ -308,22 +281,10 @@ def main() -> None:
         imagePercent = 100.0 * splitImages / totalImages if totalImages else 0.0
         objectPercent = 100.0 * splitObjects / totalObjects if totalObjects else 0.0
         print(
-            "{}: {} images ({:.2f}%), {} objects ({:.2f}%) -> {}".format(
-                splitName,
-                splitImages,
-                imagePercent,
-                splitObjects,
-                objectPercent,
-                writtenPaths[splitName],
-            )
+            f"{splitName}: {splitImages} images ({imagePercent:.2f}%), {splitObjects} objects ({objectPercent:.2f}%) -> {writtenPaths[splitName]}"
         )
-        print(
-            "{} statistics -> {}".format(
-                splitName,
-                statisticsPaths[splitName],
-            )
-        )
-    print("Combined statistics CSV -> {}".format(combinedStatisticsCsvPath))
+        print(f"{splitName} statistics -> {statisticsPaths[splitName]}")
+    print(f"Combined statistics CSV -> {combinedStatisticsCsvPath}")
 
 
 if __name__ == "__main__":

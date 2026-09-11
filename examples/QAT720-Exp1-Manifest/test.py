@@ -40,7 +40,7 @@ def main() -> None:
     """Prepare the requested data and evaluate the selected checkpoint."""
     args = parseArguments()
     dataYaml, statistics = prepareDataset(args)
-    print("Ultralytics data config: {}".format(dataYaml))
+    print(f"Ultralytics data config: {dataYaml}")
     printStatistics(statistics, args.objectSize, args.skipEmptyImages)
     if args.prepareOnly:
         print("Preparation-only mode: no model was loaded and no evaluation was started.")
@@ -49,7 +49,7 @@ def main() -> None:
     from ultralytics import YOLO
 
     model = YOLO(args.model)
-    runName = args.name or "{}_exp1".format(Path(args.model).stem)
+    runName = args.name or f"{Path(args.model).stem}_exp1"
     evaluationArguments = {
         "data": str(dataYaml),
         "imgsz": args.imageSize,
@@ -64,7 +64,7 @@ def main() -> None:
 
     metrics = {}
     for splitName in args.splits:
-        results = model.val(split=splitName, name="{}_{}".format(runName, splitName), **evaluationArguments)
+        results = model.val(split=splitName, name=f"{runName}_{splitName}", **evaluationArguments)
         metrics[splitName] = serializableMetrics(results)
     print(json.dumps(metrics, indent=2, sort_keys=True))
 
