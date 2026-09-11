@@ -12,6 +12,7 @@ dataset layout.
 Each image record must contain `filePath` or `fileName` and an `objects` list. Each object must contain `classId`,
 `xCenter`, `yCenter`, `boxWidth`, and `boxHeight`. The optional `cocoSizeCategory` field enables small, medium, or large
 object filtering. Other Exp1 metadata fields are retained in source manifests but ignored during YOLO label generation.
+UUID coverage additionally requires a nonempty `objectUuid` that is unique within each evaluated split.
 
 Use the combined `datasetMetadata.json` to reproduce the experiments. `imageMetadata.json` has no objects and cannot be
 used for training. Although `objectMetadata.json` is structurally valid, it omits background images and therefore
@@ -103,6 +104,54 @@ python examples/QAT720-Exp1-Manifest/detect.py \
     --split test \
     --device 0
 ```
+
+## GT instance coverage
+
+Add `--gt-coverage` to `test.py` or `train.py` to report which individual ground-truth objects were detected in each final
+validation/test evaluation. Precision, recall, and mAP still use the standard validator. Coverage reuses its predictions
+in the same inference pass. It is optional so manifests without object UUIDs remain usable.
+
+```bash
+python examples/QAT720-Exp1-Manifest/test.py \
+    --manifest /path/to/day0/datasetMetadata.json \
+    --dataset-root /path/to/day0 \
+    --class-names weed \
+    --model /path/to/best.pt \
+    --splits val test \
+    --gt-coverage --gt-conf 0.25 --gt-iou 0.5 \
+    --device 0
+```
+
+Matching is performed independently for every image:
+
+1. Keep predictions with confidence **at least** `--gt-conf` (default `0.25`).
+2. Consider pairs with the **same class** and IoU **strictly greater than** `--gt-iou` (default `0.5`). This is a matching
+   threshold, independent of the validator's NMS IoU threshold.
+3. Sort eligible pairs by descending IoU, breaking ties by descending prediction confidence, then manifest object order
+   and prediction order. Accept a pair only if neither its GT nor its prediction has already been matched.
+4. Discard remaining predictions that have an eligible GT as duplicate conflicts. Count remaining predictions with no
+   eligible GT as extra boxes. Predictions below the confidence cutoff are neither duplicates nor extras.
+
+A prediction can detect only one GT, and each GT counts once. Matching is greedy, so it does not guarantee the maximum
+possible number of matches. For example, three eligible predictions around one GT produce one detected GT and two
+discarded duplicates, with zero extra boxes. A confident prediction on an included background image is an extra box.
+
+Each split's result directory contains `gt_coverage.json` with:
+
+- `gtCoveragePercent`: `100 * gtDetected / gtTotal`, aggregated over all selected objects, not averaged over images.
+- `gtTotal`, `gtDetected`, `extraPredictions`, and `discardedDuplicatePredictions` counts.
+- `missedObjectUuids`: all unmatched GT UUIDs for that split.
+- `images`: per-image detected and missed UUIDs, discarded duplicate counts, and extra prediction records containing
+  `bboxXYXY` in original-image pixels, `classId`, and `confidence`.
+- The evaluated model, split, and confidence/IoU cutoffs.
+
+The scalar values are also included under `gt/` in the final JSON printed by `test.py` and in the final metrics logged to
+W&B by `train.py`. Training-epoch validation and checkpoint selection continue to use the standard metrics.
+
+Coverage uses the exact selected split and object-size filter, including background images unless excluded by the dataset
+options. It reads the original manifest objects so distinct UUIDs with identical boxes are still separate GT instances.
+If the validation loader skips a prepared image, evaluation fails instead of publishing incomplete coverage. The report
+is based on predictions after normal validator postprocessing, including NMS where applicable and its detection limit.
 
 ## Recovered experiment behavior
 

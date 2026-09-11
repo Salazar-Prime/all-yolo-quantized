@@ -5,13 +5,21 @@ import argparse
 import json
 from pathlib import Path
 
-from train import SCRIPT_DIR, addManifestArguments, prepareDataset, printStatistics
+from train import (
+    SCRIPT_DIR,
+    addEvaluationArguments,
+    addManifestArguments,
+    evaluateModel,
+    prepareDataset,
+    printStatistics,
+)
 
 
 def parseArguments() -> argparse.Namespace:
     """Parse dataset preparation and evaluation arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
     addManifestArguments(parser)
+    addEvaluationArguments(parser)
     parser.add_argument("--model", required=True, help="Detection checkpoint to evaluate.")
     parser.add_argument("--splits", nargs="+", choices=("val", "test"), default=("val", "test"))
     parser.add_argument("--image-size", dest="imageSize", type=int, default=640)
@@ -23,17 +31,6 @@ def parseArguments() -> argparse.Namespace:
     parser.add_argument("--exist-ok", dest="existOk", action="store_true")
     parser.add_argument("--disable-plots", dest="disablePlots", action="store_true")
     return parser.parse_args()
-
-
-def serializableMetrics(results) -> dict:
-    """Return numeric metrics from one Ultralytics validation result."""
-    metrics = {}
-    for key, value in results.results_dict.items():
-        try:
-            metrics[key] = float(value)
-        except (TypeError, ValueError):
-            continue
-    return metrics
 
 
 def main() -> None:
@@ -50,22 +47,9 @@ def main() -> None:
 
     model = YOLO(args.model)
     runName = args.name or f"{Path(args.model).stem}_exp1"
-    evaluationArguments = {
-        "data": str(dataYaml),
-        "imgsz": args.imageSize,
-        "batch": args.batchSize,
-        "workers": args.workers,
-        "project": str(args.project.expanduser().resolve()),
-        "exist_ok": args.existOk,
-        "plots": not args.disablePlots,
-    }
-    if args.device is not None:
-        evaluationArguments["device"] = args.device
-
     metrics = {}
     for splitName in args.splits:
-        results = model.val(split=splitName, name=f"{runName}_{splitName}", **evaluationArguments)
-        metrics[splitName] = serializableMetrics(results)
+        metrics[splitName] = evaluateModel(model, args, dataYaml, splitName, f"{runName}_{splitName}")
     print(json.dumps(metrics, indent=2, sort_keys=True))
 
 
