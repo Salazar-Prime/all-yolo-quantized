@@ -4,6 +4,9 @@ Evaluate the 28 best checkpoints from Exp2 and the 28 best checkpoints from Exp2
 The model inventory is in `checkpoints.csv`; each entry records the original training job and expected checkpoint SHA-256.
 This experiment performs evaluation only.
 
+The September 11, 2026 run completed **56/56 checkpoints** on Rainbow and passed the full UUID audit.
+See [results and all-model comparison](RESULTS.md), [CSV](results.csv), and [verification](verification.json).
+
 All source, inputs, environments, and collected outputs stay under this `all-yolo-quantized` repository. Execution uses a
 mirror at `/home/varun/work/all-yolo-quantized` on **Rainbow**, physical GPU **1**. No experiment runs on Anvil.
 
@@ -32,6 +35,10 @@ exp3/
   dataset.json                    portable references to the three manifests
   run.py                          matrix evaluation using the existing coverage validator
   run_rainbow.sh                  Rainbow GPU 1 launcher, logs, PID, and exit status
+  RESULTS.md                      completed findings, protocol, and all-model table
+  results.csv                     versioned metrics for every checkpoint
+  comparison.png / .svg           versioned comparison figures
+  verification.json               completed UUID accounting audit
   inputs/checkpoints/exp2*/       local copies of the original best checkpoints
   inputs/images/                 original images
   inputs/manifests/               original train/val/test UUID manifests
@@ -51,7 +58,7 @@ exp3/
 ```
 
 The `inputs`, runtime environments, prepared data, and raw runs are excluded from Git. They remain within this repository
-folder. The summary and experiment documentation are versioned once the run completes.
+folder. The completed summary, figures, verification, and experiment documentation are versioned.
 
 ## Run on Rainbow
 

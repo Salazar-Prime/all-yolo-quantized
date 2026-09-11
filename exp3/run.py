@@ -57,7 +57,7 @@ def summarize(project: Path, cases: list[dict]) -> list[dict]:
     if not rows:
         return rows
     with (project / "results.csv").open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     lines = [
