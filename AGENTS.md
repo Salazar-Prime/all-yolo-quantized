@@ -16,7 +16,9 @@ Ultralytics (`ultralytics` on PyPI, AGPL-3.0) is the official Python package for
 
 **Review gate:** for every addition, the reviewer decides whether deleting or changing existing code would have fixed the problem instead — if it would, that is a blocking finding. A missing or thin PR description is never itself a finding.
 
-NEVER push to `main`. NEVER force push. Always start work in a new git worktree (`git worktree add`) on a feature branch and open a PR — never edit the primary checkout directly, it may hold in-flight work.
+NEVER push to `main`. NEVER force push. Work on a feature branch in this checkout and open a PR. Keep code, configuration,
+experiment inputs, and collected results within this repository; do not create sibling worktrees. Run experiments on
+Rainbow, never on Anvil. Rainbow execution uses a mirror of this repository, with results collected back here.
 
 ## PR Review
 
