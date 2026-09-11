@@ -1,0 +1,8 @@
+{
+  "names": ["weed"],
+  "manifests": {
+    "train": "inputs/manifests/trainManifest.json",
+    "val": "inputs/manifests/valManifest.json",
+    "test": "inputs/manifests/testManifest.json"
+  }
+}

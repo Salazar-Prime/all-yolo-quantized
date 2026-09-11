@@ -1,0 +1,8 @@
+inputs/
+prepared/
+runs/
+.venv/
+.cache/
+!comparison.png
+!comparison.svg
+!results.csv

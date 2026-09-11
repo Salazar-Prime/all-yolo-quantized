@@ -1,0 +1,7 @@
+{
+  "verified_checkpoints": 56,
+  "images_per_checkpoint": 4579,
+  "gt_objects_per_checkpoint": 3596,
+  "uuid_accounting": "Every source UUID appears exactly once as detected or missed in its original image",
+  "aggregate_counts": "Detected, missed, extra, and duplicate totals agree with all per-image records"
+}
