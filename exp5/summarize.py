@@ -183,7 +183,9 @@ def main():
                     break
             source_phase = variant if variant in {"ptq", "qat"} else "fp32"
             status = model / ("prepare-" + source_phase + ".exit")
-            if status.exists() and status.read_text().strip() != "0":
+            if (model / "preparation-failed.json").exists() or (
+                status.exists() and status.read_text().strip() != "0"
+            ):
                 row["status"] = "preparation_failed"
             rows.append(row)
     if rows:
