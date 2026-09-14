@@ -1,9 +1,11 @@
 # Experiment 5: Xavier deployment benchmarks
 
-Status: YOLO26n's full five-format benchmark is running on Xavier using all 4,579 checksum-verified test images.
+YOLO26n completed all five formats on Xavier using all 4,579 checksum-verified test images, with its artifacts archived
+to Anvil. The **Exp5 Progress** action reports the remaining campaign's live status.
 ONNX CUDA, TensorRT FP16, and corrected INT8 PTQ passed 32-image smoke checks; all 275 ONNX profile nodes executed on CUDA.
-Two Rainbow workers prepare independent models on GPU 0 and GPU 1, starting with the YOLO26 family. Each model's QAT
-starts from its completed validation calibration. Xavier deployment remains sequential.
+Rainbow preparation started on GPU 0 and GPU 1 with the YOLO26 family. GPU 0 was released on September 14 at 11:07 EDT;
+remaining preparation uses GPU 1. Each model's QAT starts from its completed validation calibration. Xavier deployment
+remains sequential.
 
 The active production run is `exp5-20260914`. An earlier INT8 build failed on the attention positional convolution;
 exp4 already excludes that layer, and this run applies the same exclusion before QAT and export. Earlier preparation
@@ -55,6 +57,10 @@ default. Export and QAT preparation run on Rainbow in a mirror of this repositor
 deployment benchmarks run on Xavier. Anvil is the control and artifact archive host. The two `run_prepare.sh` workers
 claim separate models with file locks and run each model's calibration before its QAT; device execution follows the
 manifest order.
+
+A run's `gpu-<index>.stop` file retires that Rainbow worker before another model starts and prevents its restart. The
+September 14 transition used the existing model locks to let both already-running models finish, release GPU 0 first,
+and continue the queue on GPU 1. The transition script, event record, and log are preserved in the production run folder.
 
 ## Data and measurement protocol
 

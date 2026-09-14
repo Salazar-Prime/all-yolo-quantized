@@ -1,6 +1,6 @@
 {
   "experiment": "exp5",
-  "status": "running_yolo26_first_with_parallel_rainbow_preparation",
+  "status": "running_yolo26_first_with_single_rainbow_gpu",
   "source_experiment": "exp2",
   "model_manifest": "exp5/models.csv",
   "model_count": 28,
@@ -131,7 +131,7 @@
     "failed"
   ],
   "completed_cases": 0,
-  "preparation_gpu_selection": "Two Rainbow workers, one per physical GPU 0 and 1, with independent model calibration/QAT pipelines",
+  "preparation_gpu_selection": "Initially GPU 0 and GPU 1; GPU 0 released at 2026-09-14 11:07 EDT after its current model completed. Remaining Rainbow preparation uses GPU 1, with gpu-0.stop preventing restart.",
   "production_run": "exp5-20260914",
   "smoke_run": "smoke-20260913",
   "model_order": "YOLO26 n/s/m/l/x/n-p2/s-p2 first, then remaining models by checkpoint size",
