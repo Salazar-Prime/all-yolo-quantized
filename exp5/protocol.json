@@ -1,6 +1,6 @@
 {
   "experiment": "exp5",
-  "status": "running_yolo26_first_with_single_rainbow_gpu",
+  "status": "xavier_paused_for_field_testing_rainbow_gpu1_continues",
   "source_experiment": "exp2",
   "model_manifest": "exp5/models.csv",
   "model_count": 28,

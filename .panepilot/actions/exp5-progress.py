@@ -108,6 +108,9 @@ def main():
         sources = {label: future.result() for label, future in futures.items()}
     available = {label: data is not None for label, data in sources.items()}
     local = snapshot(ROOT / "exp5/runs" / run)
+    paused = (ROOT / "exp5/runs" / run / "xavier-paused.json").exists()
+    if paused:
+        print("Xavier benchmarks are paused for field testing; Rainbow preparation continues.")
     for label, data in sources.items():
         if data is None:
             print("{} unavailable: showing Anvil copies where present; other states are Unknown.".format(label))
@@ -127,6 +130,8 @@ def main():
         for index, phase in enumerate((0, 0, 0, 1, 2)):
             if prep[phase] == "FAIL":
                 benchmarks[index] = "Prep FAIL"
+            elif paused and benchmarks[index] != "Done" and "FAIL" not in benchmarks[index]:
+                benchmarks[index] = "Paused"
         rows.append([model] + prep + benchmarks + ["Done" if archived else "Wait"])
     widths = [max(len(row[index]) for row in rows) for index in range(len(rows[0]))]
     print()

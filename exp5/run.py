@@ -73,6 +73,8 @@ def main():
         raise ValueError("Run ID may contain only letters, digits, hyphens, and underscores")
     output = ROOT / "exp5/runs" / args.run
     output.mkdir(parents=True, exist_ok=True)
+    if (output / "xavier-paused.json").exists():
+        raise SystemExit("Xavier is paused for field testing; review xavier-paused.json before resuming")
     cases = list(csv.DictReader((ROOT / "exp5/models.csv").open()))
     telemetry = XAVIER + "/exp5/runs/" + args.run + "/telemetry.jsonl"
     remote(HOST, "test -r " + shlex.quote(telemetry))
