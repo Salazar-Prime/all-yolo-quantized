@@ -1,0 +1,144 @@
+{
+  "experiment": "exp5",
+  "status": "running_yolo26_first_with_parallel_rainbow_preparation",
+  "source_experiment": "exp2",
+  "model_manifest": "exp5/models.csv",
+  "model_count": 28,
+  "source_revision": "a50c7948913188ce49c2663004317aac9358c961",
+  "device": {
+    "ssh_alias": "soysan-over-purdue-ip",
+    "ssh_user": "usr",
+    "requested_address": "192.168.100.164",
+    "alternative_address": "100.83.255.62",
+    "hardware": "NVIDIA Jetson Xavier NX Developer Kit",
+    "jetpack": "5.1.4 (L4T R35.6.0)",
+    "tensorrt": "8.5.2.2",
+    "power_mode": "MODE_20W_6CORE (8)",
+    "usable_memory_mib": 6833,
+    "python": "3.8.10",
+    "torch": "2.1.0a0+41361538.nv23.06",
+    "cuda": "11.4",
+    "onnxruntime": "1.16.0",
+    "ssh_endpoint": "127.0.0.1:2225 via user computer"
+  },
+  "archive_root": "/anvil/scratch/x-vaggarwal/yolov7Quantization/projects/all-yolo-quantized/exp5",
+  "engine_build_host": "xavier",
+  "benchmark_host": "xavier",
+  "preparation_host": "rainbow",
+  "one_model_at_a_time": true,
+  "remove_remote_artifacts_only_after_sha256_verified_archive": true,
+  "variants": ["onnx_fp32_cuda", "tensorrt_fp32", "tensorrt_fp16", "tensorrt_int8_ptq", "tensorrt_int8_qat"],
+  "case_count": 140,
+  "data": {
+    "seed": 42,
+    "class_names": ["weed"],
+    "splits": {
+      "val": {
+        "manifest": "exp3/inputs/manifests/valManifest.json",
+        "sha256": "e7245d9d0eb35766f7ef19aa905cace7b24eab2dcbddb496d258b805f1caa588",
+        "images": 1832,
+        "objects": 1422,
+        "background_images": 1255
+      },
+      "test": {
+        "manifest": "exp3/inputs/manifests/testManifest.json",
+        "sha256": "f3a50f9bfed923adb790890d1ce526fee7ce59038c7950994cfd3df412144c37",
+        "images": 4579,
+        "objects": 3596,
+        "background_images": 3180
+      }
+    },
+    "ptq_calibration_split": "val",
+    "ptq_calibration_samples": 1832,
+    "qat_finetuning_split": "val",
+    "evaluation_split": "test",
+    "test_disjoint_from_finetuning_and_calibration": true
+  },
+  "qat": {
+    "recipe_status": "fixed before full test evaluation; attention PE convolution excluded after TensorRT 8.5 build failure",
+    "epochs": 10,
+    "optimizer": "AdamW",
+    "lr0": 0.0001,
+    "lrf": 0.1,
+    "warmup_epochs": 1.0,
+    "cos_lr": true,
+    "amp": false,
+    "mosaic": 0.0,
+    "mixup": 0.0,
+    "checkpoint_selection": "final_epoch_fixed_in_advance",
+    "reuse_exp4_quantized_checkpoints": false,
+    "float_exclusions": [
+      "detection head (native prepare_qat policy)",
+      "*attn.pe.conv* (exp4 TensorRT compatibility policy)"
+    ]
+  },
+  "evaluation": {
+    "image_size": [640, 640],
+    "batch_size": 1,
+    "rect": false,
+    "confidence": 0.001,
+    "nms_iou": 0.5,
+    "max_detections": 300,
+    "head_policy": "one_to_many_external_nms_matching_exp3",
+    "warmup_frames": 100,
+    "test_passes": 3,
+    "map_metrics": ["map50", "map50_95"],
+    "test_images_per_pass": 4579,
+    "timing_source": "real_test_images",
+    "record_inference_and_pipeline_fps_separately": true,
+    "record_full_pass_wall_seconds": true,
+    "cuda_synchronization_required": true,
+    "onnx_smoke_cuda_nodes": 275
+  },
+  "telemetry": {
+    "sample_interval_ms": 100,
+    "raw_samples": true,
+    "phase_boundaries": true,
+    "metrics": [
+      "board_power_mean_w",
+      "board_power_peak_w",
+      "board_energy_j",
+      "board_energy_j_per_image",
+      "system_ram_mean_mib",
+      "system_ram_peak_mib",
+      "process_rss_peak_mib",
+      "swap_peak_mib",
+      "cpu_per_core_utilization_pct",
+      "gpu_utilization_pct",
+      "memory_controller_utilization_pct",
+      "gpu_clock_mhz",
+      "cpu_clock_mhz",
+      "temperature_c"
+    ],
+    "idle_baseline_seconds": 30,
+    "power_scope": "available_board_input_rail_with_actual_name_recorded",
+    "measure_build_and_inference_separately": true
+  },
+  "operations": {
+    "flops_per_image_convention": "2 operations per multiply-accumulate; record profiler and uncovered operators",
+    "derived_rate": "effective_gflops_per_second = reference_gflops_per_image * measured_inference_fps",
+    "int8_rate_label": "effective_gops_per_second; equivalent operation count, not measured floating-point instructions",
+    "hardware_instruction_rate": "requires separate supported profiler counters; never substitute derived rate without labeling"
+  },
+  "deployment_statuses": [
+    "pending",
+    "passed",
+    "build_oom",
+    "runtime_oom",
+    "storage_exhausted",
+    "unsupported_operator",
+    "runtime_incompatible",
+    "failed"
+  ],
+  "completed_cases": 0,
+  "preparation_gpu_selection": "Two Rainbow workers, one per physical GPU 0 and 1, with independent model calibration/QAT pipelines",
+  "production_run": "exp5-20260914",
+  "smoke_run": "smoke-20260913",
+  "model_order": "YOLO26 n/s/m/l/x/n-p2/s-p2 first, then remaining models by checkpoint size",
+  "engine_build": {
+    "workspace_mib": 1024,
+    "tf32": false,
+    "shared_timing_cache": true,
+    "timing_cache_snapshot_per_successful_build": true
+  }
+}
