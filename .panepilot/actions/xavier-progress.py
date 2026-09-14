@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Print current Exp5 preparation, Xavier benchmark, and archival progress."""
+"""Print current Xavier benchmark and archival progress for Exp5."""
 
 import csv
 import datetime
@@ -8,7 +8,6 @@ import json
 import shlex
 import subprocess
 import sys
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 
@@ -38,9 +37,7 @@ def snapshot(directory):
         if len(args) < 4:
             continue
         script, model, variant, phase = args[-4:]
-        if script.endswith("/prepare.py") and variant == root.name:
-            result["active"][model + "/prepare-" + phase] = "Running"
-        elif script.endswith("/benchmark.py") and Path(model).parent == root:
+        if script.endswith("/benchmark.py") and Path(model).parent == root:
             result["active"][Path(model).name + "/" + variant] = phase
     return result
 
@@ -63,13 +60,12 @@ def remote_snapshot(host, directory):
         return None
 
 
-def progress(model, variant, data, available, preparation=False):
+def progress(model, variant, data, available):
     files, active = data["files"], data["active"]
-    key = model + "/" + ("prepare-" if preparation else "") + variant
-    if preparation:
-        code = files.get(key + ".exit")
-        return ("Done" if code == "0" else "FAIL") if code else active.get(key, "Wait" if available else "Unknown")
-    if model + "/preparation-failed.json" in files:
+    key = model + "/" + variant
+    source_phase = variant if variant in {"ptq", "qat"} else "fp32"
+    code = files.get(model + "/prepare-" + source_phase + ".exit", "0")
+    if model + "/preparation-failed.json" in files or code != "0":
         return "Prep FAIL"
     for phase in ("build", "evaluate", "profile"):
         code = files.get(key + "/" + phase + ".exit")
@@ -92,47 +88,36 @@ def progress(model, variant, data, available, preparation=False):
 
 def main():
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "exp5"))
-    from run import HOST, RAINBOW, ROOT, XAVIER
+    from run import HOST, ROOT, XAVIER
 
     run = json.loads((ROOT / "exp5/protocol.json").read_text())["production_run"]
     models = [row["model"] for row in csv.DictReader((ROOT / "exp5/models.csv").open())]
     print(
-        "Exp5 progress: {} | {}".format(run, datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")),
+        "Xavier model progress: {} | {}".format(
+            run, datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+        ),
         flush=True,
     )
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        futures = {
-            label: pool.submit(remote_snapshot, host, root + "/exp5/runs/" + run)
-            for label, host, root in (("Rainbow", "rainbow", RAINBOW), ("Xavier", HOST, XAVIER))
-        }
-        sources = {label: future.result() for label, future in futures.items()}
-    available = {label: data is not None for label, data in sources.items()}
-    local = snapshot(ROOT / "exp5/runs" / run)
+    remote = remote_snapshot(HOST, XAVIER + "/exp5/runs/" + run)
+    data = snapshot(ROOT / "exp5/runs" / run)
     paused = (ROOT / "exp5/runs" / run / "xavier-paused.json").exists()
     if paused:
-        print("Xavier benchmarks are paused for field testing; Rainbow preparation continues.")
-    for label, data in sources.items():
-        if data is None:
-            print("{} unavailable: showing Anvil copies where present; other states are Unknown.".format(label))
-            sources[label] = {"files": dict(local["files"]), "active": {}}
-        else:
-            sources[label] = {"files": dict(local["files"], **data["files"]), "active": data["active"]}
-    rows = [["Model", "Export", "Calib", "QAT tune", "ONNX", "TRT32", "TRT16", "INT8 PTQ", "INT8 QAT", "Archive"]]
+        print("Xavier benchmarks are paused for field testing.")
+    if remote is None:
+        print("Xavier unavailable: showing Anvil copies where present; other states are Unknown.")
+    else:
+        data["files"].update(remote["files"])
+        data["active"] = remote["active"]
+    rows = [["Model", "ONNX", "TRT32", "TRT16", "INT8 PTQ", "INT8 QAT", "Archive"]]
     for model in models:
-        prep = [
-            progress(model, phase, sources["Rainbow"], available["Rainbow"], True) for phase in ("fp32", "ptq", "qat")
-        ]
-        archived = model + "/archived.json" in local["files"]
+        archived = model + "/archived.json" in data["files"]
         benchmarks = [
-            progress(model, variant, sources["Xavier"], archived or available["Xavier"])
+            progress(model, variant, data, archived or remote is not None)
             for variant in ("onnx", "fp32", "fp16", "ptq", "qat")
         ]
-        for index, phase in enumerate((0, 0, 0, 1, 2)):
-            if prep[phase] == "FAIL":
-                benchmarks[index] = "Prep FAIL"
-            elif paused and benchmarks[index] != "Done" and "FAIL" not in benchmarks[index]:
-                benchmarks[index] = "Paused"
-        rows.append([model] + prep + benchmarks + ["Done" if archived else "Wait"])
+        if paused:
+            benchmarks = [value if value == "Done" or "FAIL" in value else "Paused" for value in benchmarks]
+        rows.append([model] + benchmarks + ["Done" if archived else "Wait"])
     widths = [max(len(row[index]) for row in rows) for index in range(len(rows[0]))]
     print()
     for index, row in enumerate(rows):
@@ -140,10 +125,8 @@ def main():
         if index == 0:
             print("-+-".join("-" * width for width in widths))
     print(
-        "\nPreparation: {}/{} models | Xavier: {}/{} combinations | Archived: {}/{} models".format(
-            sum(all(value == "Done" for value in row[1:4]) for row in rows[1:]),
-            len(models),
-            sum(value == "Done" for row in rows[1:] for value in row[4:9]),
+        "\nXavier: {}/{} combinations | Archived: {}/{} models".format(
+            sum(value == "Done" for row in rows[1:] for value in row[1:6]),
             len(models) * 5,
             sum(row[-1] == "Done" for row in rows[1:]),
             len(models),

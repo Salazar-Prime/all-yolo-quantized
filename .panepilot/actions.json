@@ -3,8 +3,8 @@
   "actions": [
     {
       "id": "0a2a5f82-6cd4-46fb-9ab2-d2cc3b6505fa",
-      "name": "Exp5 Progress",
-      "command": "python3 .panepilot/actions/exp5-progress.py"
+      "name": "Xavier Model Progress",
+      "command": "bash .panepilot/actions/xavier-progress.sh"
     }
   ]
 }

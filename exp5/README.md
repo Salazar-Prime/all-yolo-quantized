@@ -1,7 +1,7 @@
 # Experiment 5: Xavier deployment benchmarks
 
 YOLO26n completed all five formats on Xavier using all 4,579 checksum-verified test images, with its artifacts archived
-to Anvil. The **Exp5 Progress** action reports the remaining campaign's live status.
+to Anvil. The **Xavier Model Progress** action reports the remaining campaign's live status.
 All 28 models completed Rainbow preparation on September 14 at 15:14 EDT. Xavier benchmarking resumed that evening
 from YOLO26s after field testing, with its RTSP service stopped and a fresh telemetry session following the device reboot.
 The interrupted snapshot is preserved in `resume-20260914-evening/` within the production run. Verified field copies of
@@ -180,7 +180,8 @@ copies, and updates `results.csv` and `status.json` using `summarize.py`. It ret
 transfers. Completed stages and locks support resuming collection after a connection interruption. Inspect failed
 stage logs before deliberately retrying them with a new run ID.
 
-In this folder's PanePilot actions, select **Exp5 Progress**, or run `python3 .panepilot/actions/exp5-progress.py`.
-It prints a fresh table for all 28 models from Rainbow, Xavier, and the Anvil archive, using the production run in
-`protocol.json`. It reports preparation, each runtime's build/test progress, failures, and archival status. Unavailable
-SSH connections are labeled, with existing Anvil copies shown where available. The action only reads experiment state.
+In this folder's PanePilot actions, select **Xavier Model Progress**, or run `bash .panepilot/actions/xavier-progress.sh`.
+The shell script calls the progress reporter, which prints all 28 models using live Xavier status and the Anvil archive
+for the production run in `protocol.json`. The table shows each runtime's build/test progress, failures, and archival
+status. An unavailable Xavier connection is labeled, with existing Anvil copies shown where available. The action only
+reads experiment state.
