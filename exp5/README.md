@@ -168,3 +168,8 @@ The controller keeps computation remote, collects artifacts after each model, ve
 copies, and updates `results.csv` and `status.json` using `summarize.py`. It retries interrupted SSH connections and
 transfers. Completed stages and locks support resuming collection after a connection interruption. Inspect failed
 stage logs before deliberately retrying them with a new run ID.
+
+In this folder's PanePilot actions, select **Exp5 Progress**, or run `python3 .panepilot/actions/exp5-progress.py`.
+It prints a fresh table for all 28 models from Rainbow, Xavier, and the Anvil archive, using the production run in
+`protocol.json`. It reports preparation, each runtime's build/test progress, failures, and archival status. Unavailable
+SSH connections are labeled, with existing Anvil copies shown where available. The action only reads experiment state.
