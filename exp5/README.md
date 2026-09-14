@@ -2,10 +2,11 @@
 
 YOLO26n completed all five formats on Xavier using all 4,579 checksum-verified test images, with its artifacts archived
 to Anvil. The **Exp5 Progress** action reports the remaining campaign's live status.
-Xavier benchmarking is paused for field testing; Rainbow preparation continues on GPU 1. Verified copies of all four
-YOLO26n TensorRT engines are in `~/work/all-yolo-quantized/exp5/field/yolo26n/` on Xavier, alongside checksums and results.
-The original RTSP service is restored, and its model configuration has not been changed. The controller honors the
-production run's `xavier-paused.json` marker until an explicit resume.
+All 28 models completed Rainbow preparation on September 14 at 15:14 EDT. Xavier benchmarking resumed that evening
+from YOLO26s after field testing, with its RTSP service stopped and a fresh telemetry session following the device reboot.
+The interrupted snapshot is preserved in `resume-20260914-evening/` within the production run. Verified field copies of
+YOLO26n's four engines remain in `~/work/all-yolo-quantized/exp5/field/yolo26n/` on Xavier. A run's `xavier-paused.json`
+marker blocks the controller until an explicit resume.
 ONNX CUDA, TensorRT FP16, and corrected INT8 PTQ passed 32-image smoke checks; all 275 ONNX profile nodes executed on CUDA.
 Rainbow preparation started on GPU 0 and GPU 1 with the YOLO26 family. GPU 0 was released on September 14 at 11:07 EDT;
 remaining preparation uses GPU 1. Each model's QAT starts from its completed validation calibration. Xavier deployment

@@ -1,6 +1,6 @@
 {
   "experiment": "exp5",
-  "status": "xavier_paused_for_field_testing_rainbow_gpu1_continues",
+  "status": "xavier_resumed_after_field_testing_rainbow_preparation_complete",
   "source_experiment": "exp2",
   "model_manifest": "exp5/models.csv",
   "model_count": 28,
