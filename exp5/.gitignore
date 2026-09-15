@@ -1,0 +1,7 @@
+runs/
+inputs/
+prepared/
+field/
+*.plan
+.venv*/
+.cache/

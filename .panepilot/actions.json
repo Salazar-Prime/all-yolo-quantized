@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "id": "0a2a5f82-6cd4-46fb-9ab2-d2cc3b6505fa",
+      "name": "Xavier Model Progress",
+      "command": "bash .panepilot/actions/xavier-progress.sh"
+    }
+  ]
+}
