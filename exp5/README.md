@@ -208,7 +208,8 @@ runs PTQ/QAT for every remaining model before its floating-point queue, then wri
 
 The controller keeps computation remote, collects artifacts after each model, verifies hashes before deleting device
 copies, and updates `results.csv` and `status.json` using `summarize.py`. It retries interrupted SSH connections and
-transfers. A worker that disappears without an exit record stops its controller for recovery. Inspect failed
+transfers. Each worker first runs a CUDA kernel; a device initialization failure stops its controller before model variants
+are attempted. A worker that disappears without an exit record also stops its controller for recovery. Inspect failed
 stage logs before deliberately retrying them with a new run ID.
 
 In this folder's PanePilot actions, select **Xavier Model Progress**, or run `bash .panepilot/actions/xavier-progress.sh`.

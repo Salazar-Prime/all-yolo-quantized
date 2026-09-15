@@ -13,6 +13,7 @@ if [[ -n "$service" ]] && systemctl --user is-active --quiet "$service"; then
     systemctl --user stop "$service"
     trap 'systemctl --user start "$service"' EXIT
 fi
+exp5/.venv/bin/python -c 'import torch; assert torch.ones(1, device="cuda").sum().item() == 1'
 for variant in "$@"; do
     start=$(wc -l <"$telemetry")
     (( start > 0 ))
