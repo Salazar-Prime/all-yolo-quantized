@@ -1,7 +1,7 @@
 # Experiment 5: Xavier deployment benchmarks
 
-YOLO26n completed all five formats on Xavier using all 4,579 checksum-verified test images, with its artifacts archived
-to Anvil. The **Xavier Model Progress** action reports the remaining campaign's live status.
+Exp5 distributes its 28 models across three Xavier NX devices. Each device builds and benchmarks one model at a time,
+then returns its engines and measurements to Anvil. The **Xavier Model Progress** action reports all three queues.
 All 28 models completed Rainbow preparation on September 14 at 15:14 EDT. Xavier benchmarking resumed that evening
 from YOLO26s after field testing, with its RTSP service stopped and a fresh telemetry session following the device reboot.
 The interrupted snapshot is preserved in `resume-20260914-evening/` within the production run. Verified field copies of
@@ -10,7 +10,19 @@ marker blocks the controller until an explicit resume.
 ONNX CUDA, TensorRT FP16, and corrected INT8 PTQ passed 32-image smoke checks; all 275 ONNX profile nodes executed on CUDA.
 Rainbow preparation started on GPU 0 and GPU 1 with the YOLO26 family. GPU 0 was released on September 14 at 11:07 EDT;
 remaining preparation uses GPU 1. Each model's QAT starts from its completed validation calibration. Xavier deployment
-remains sequential.
+remains sequential within each device.
+
+| Device     | Assigned models                        | L4T    | Power mode    |
+| ---------- | -------------------------------------- | ------ | ------------- |
+| `soysan`   | YOLO26, YOLO26-P2, YOLO11, YOLO12 (17) | 35.6.0 | 20 W, 6 cores |
+| `ubuntu`   | YOLOv9 t/s/m/c/e (5)                   | 35.4.1 | 20 W, 6 cores |
+| `ubuntu-1` | YOLOv10 n/s/m/b/l/x (6)                | 35.5.0 | 20 W, 6 cores |
+
+`protocol.json` owns these disjoint assignments. Results include a device column and each newly executed model archives
+`device.json`, including its actual hardware, runtime versions, boot ID, and power configuration. The operating-system
+releases differ, so hardware and software identity must accompany comparisons across families. The two new devices use
+the same NVIDIA PyTorch 23.06 release, supported on [JetPack 5.1.x](https://docs.nvidia.com/deeplearning/frameworks/install-pytorch-jetson-platform-release-notes/pytorch-jetson-rel.html),
+TensorRT 8.5.2, and ONNX Runtime GPU 1.16.0. Engines and timing caches are built and used on their own device.
 
 The active production run is `exp5-20260914`. An earlier INT8 build failed on the attention positional convolution;
 exp4 already excludes that layer, and this run applies the same exclusion before QAT and export. Earlier preparation
@@ -110,7 +122,7 @@ is unsupported here. Engine builds use a 1,024 MiB workspace limit and disable T
 production builds to reduce repeated tactic searches, with a snapshot archived per successful build. Build time and
 energy therefore include the effect of cache reuse; inference timing excludes the build process.
 
-## Sequential deployment and archive
+## Parallel devices and verified archive
 
 Stage the required dataset once. Transfer one model at a time, build and benchmark its variants serially on Xavier,
 then collect its engines, ONNX/checkpoint outputs, logs, metrics, and raw telemetry into `exp5/runs/<run-id>/<model>/`
@@ -118,8 +130,9 @@ on Anvil scratch. Verify every collected artifact with SHA-256 before deleting t
 Xavier. If collection fails, keep the remote artifacts and stop advancing the model queue. No generated engine remains
 on Xavier after its verified archive completes, and no engine is built on Anvil or Rainbow for the Xavier measurements.
 
-The originally active DeepStream workload is the user service `yolo26s-rtsp.service`. It was stopped for setup and device
-measurements. The device runner restores it on exit. Record and preserve the existing power/clock configuration.
+The originally active DeepStream workload is the user service `yolo26s-rtsp.service`. Each deployment specifies its
+inference service, if present; the runner stops an active service and restores it on exit. Neither new board had a running
+inference service. Record and preserve the existing power/clock configuration.
 
 Use one row per model/variant, including failures. Distinguish build OOM, inference OOM, disk exhaustion, unsupported
 operators, and incompatible runtimes. Preserve failing commands and logs. Only demonstrated memory failures justify a
@@ -147,6 +160,12 @@ ssh -NT \
 This exposes the relayed SSH endpoint only on Anvil login06's loopback interface. The alias now uses `127.0.0.1:2225`
 with `HostKeyAlias soysan-over-purdue-ip`. The tunnel must remain connected for transfers and control.
 
+The added devices were bootstrapped through this Xavier using Tailscale addresses `100.82.57.52` (`ubuntu`) and
+`100.64.106.106` (`ubuntu-1`). Their Anvil aliases are `xavier-ubuntu` and `xavier-ubuntu-1`. Each now maintains its own
+outbound reverse tunnel to Anvil, listening only on `127.0.0.1:2226` or `:2227`. Restricted keys permit their designated
+forward and disable shell access. This avoids model and dataset transfers through the original board during its power
+measurements. The aliases ending in `-via-soysan` retain the original jump route for recovery.
+
 ## Runtime and execution
 
 Rainbow uses `exp5/.venv`, inheriting its existing CUDA PyTorch environment, with ModelOpt 0.44.0 and
@@ -173,7 +192,14 @@ Then run the control process on Anvil:
 
 ```bash
 python3 -u exp5/run.py exp5-20260914
+python3 -u exp5/run.py exp5-20260914 --device ubuntu
+python3 -u exp5/run.py exp5-20260914 --device ubuntu-1
 ```
+
+Run each command in a separate persistent process. Each controller takes a lock for its device and filters the manifest
+to its assigned families. An archive lock serializes collection and summary updates; remote benchmarks remain parallel.
+Every device requires its own privileged telemetry collector and run-level `device.json` before launch. A controller
+writes `complete-<device>.json` when its queue ends; `complete.json` requires all three queues to finish.
 
 The controller keeps computation remote, collects artifacts after each model, verifies hashes before deleting device
 copies, and updates `results.csv` and `status.json` using `summarize.py`. It retries interrupted SSH connections and
@@ -181,7 +207,7 @@ transfers. Completed stages and locks support resuming collection after a connec
 stage logs before deliberately retrying them with a new run ID.
 
 In this folder's PanePilot actions, select **Xavier Model Progress**, or run `bash .panepilot/actions/xavier-progress.sh`.
-The shell script calls the progress reporter, which prints all 28 models using live Xavier status and the Anvil archive
+The shell script calls the progress reporter, which prints all 28 models using concurrent live device queries and the Anvil archive
 for the production run in `protocol.json`. The table shows each runtime's build/test progress, failures, and archival
 status. An unavailable Xavier connection is labeled, with existing Anvil copies shown where available. The action only
 reads experiment state.

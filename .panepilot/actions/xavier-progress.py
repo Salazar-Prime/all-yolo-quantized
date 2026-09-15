@@ -8,6 +8,7 @@ import json
 import shlex
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 
@@ -88,7 +89,7 @@ def progress(model, variant, data, available):
 
 def main():
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "exp5"))
-    from run import HOST, ROOT, XAVIER
+    from run import DEPLOYMENTS, ROOT, deployment_for
 
     run = json.loads((ROOT / "exp5/protocol.json").read_text())["production_run"]
     models = [row["model"] for row in csv.DictReader((ROOT / "exp5/models.csv").open())]
@@ -98,26 +99,33 @@ def main():
         ),
         flush=True,
     )
-    remote = remote_snapshot(HOST, XAVIER + "/exp5/runs/" + run)
     data = snapshot(ROOT / "exp5/runs" / run)
     paused = (ROOT / "exp5/runs" / run / "xavier-paused.json").exists()
     if paused:
         print("Xavier benchmarks are paused for field testing.")
-    if remote is None:
-        print("Xavier unavailable: showing Anvil copies where present; other states are Unknown.")
-    else:
-        data["files"].update(remote["files"])
-        data["active"] = remote["active"]
-    rows = [["Model", "ONNX", "TRT32", "TRT16", "INT8 PTQ", "INT8 QAT", "Archive"]]
+    with ThreadPoolExecutor(max_workers=len(DEPLOYMENTS)) as pool:
+        futures = {
+            name: pool.submit(remote_snapshot, device["ssh_alias"], device["root"] + "/exp5/runs/" + run)
+            for name, device in DEPLOYMENTS.items()
+        }
+        remotes = {name: future.result() for name, future in futures.items()}
+    for name, remote in remotes.items():
+        if remote is None:
+            print(name + " unavailable: showing Anvil copies; other states are Unknown.")
+        else:
+            data["files"].update(remote["files"])
+            data["active"].update(remote["active"])
+    rows = [["Model", "Device", "ONNX", "TRT32", "TRT16", "INT8 PTQ", "INT8 QAT", "Archive"]]
     for model in models:
         archived = model + "/archived.json" in data["files"]
+        device = deployment_for(model)
         benchmarks = [
-            progress(model, variant, data, archived or remote is not None)
+            progress(model, variant, data, archived or remotes[device] is not None)
             for variant in ("onnx", "fp32", "fp16", "ptq", "qat")
         ]
         if paused:
             benchmarks = [value if value == "Done" or "FAIL" in value else "Paused" for value in benchmarks]
-        rows.append([model] + benchmarks + ["Done" if archived else "Wait"])
+        rows.append([model, device] + benchmarks + ["Done" if archived else "Wait"])
     widths = [max(len(row[index]) for row in rows) for index in range(len(rows[0]))]
     print()
     for index, row in enumerate(rows):
@@ -126,7 +134,7 @@ def main():
             print("-+-".join("-" * width for width in widths))
     print(
         "\nXavier: {}/{} combinations | Archived: {}/{} models".format(
-            sum(value == "Done" for row in rows[1:] for value in row[1:6]),
+            sum(value == "Done" for row in rows[1:] for value in row[2:7]),
             len(models) * 5,
             sum(row[-1] == "Done" for row in rows[1:]),
             len(models),

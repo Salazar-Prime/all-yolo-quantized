@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /home/usr/work/all-yolo-quantized
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 model_dir="${1:?model directory required}"
+service="${2-}"
 export YOLO_AUTOINSTALL=false YOLO_CONFIG_DIR="$PWD/exp5/.cache/settings" MPLCONFIGDIR="$PWD/exp5/.cache/matplotlib"
+mkdir -p "$YOLO_CONFIG_DIR" "$MPLCONFIGDIR"
 export OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=1
-systemctl --user stop yolo26s-rtsp.service
-trap 'systemctl --user start yolo26s-rtsp.service' EXIT
+if [[ -n "$service" ]] && systemctl --user is-active --quiet "$service"; then
+    systemctl --user stop "$service"
+    trap 'systemctl --user start "$service"' EXIT
+fi
 for variant in onnx fp32 fp16 ptq qat; do
     python_bin=exp5/.venv/bin/python
     if [[ "$variant" == onnx ]]; then python_bin=exp5/.venv-onnx/bin/python; fi

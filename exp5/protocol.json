@@ -1,6 +1,6 @@
 {
   "experiment": "exp5",
-  "status": "xavier_resumed_after_field_testing_rainbow_preparation_complete",
+  "status": "parallel_xavier_deployment",
   "source_experiment": "exp2",
   "model_manifest": "exp5/models.csv",
   "model_count": 28,
@@ -25,7 +25,7 @@
   "engine_build_host": "xavier",
   "benchmark_host": "xavier",
   "preparation_host": "rainbow",
-  "one_model_at_a_time": true,
+  "one_model_at_a_time": "per device",
   "remove_remote_artifacts_only_after_sha256_verified_archive": true,
   "variants": ["onnx_fp32_cuda", "tensorrt_fp32", "tensorrt_fp16", "tensorrt_int8_ptq", "tensorrt_int8_qat"],
   "case_count": 140,
@@ -134,11 +134,31 @@
   "preparation_gpu_selection": "Initially GPU 0 and GPU 1; GPU 0 released at 2026-09-14 11:07 EDT after its current model completed. Remaining Rainbow preparation uses GPU 1, with gpu-0.stop preventing restart.",
   "production_run": "exp5-20260914",
   "smoke_run": "smoke-20260913",
-  "model_order": "YOLO26 n/s/m/l/x/n-p2/s-p2 first, then remaining models by checkpoint size",
+  "model_order": "Manifest order within each device: YOLOv9 on ubuntu; YOLOv10 on ubuntu-1; YOLO26, YOLO11, YOLO12 on soysan",
   "engine_build": {
     "workspace_mib": 1024,
     "tf32": false,
     "shared_timing_cache": true,
     "timing_cache_snapshot_per_successful_build": true
+  },
+  "deployments": {
+    "soysan": {
+      "ssh_alias": "soysan-over-purdue-ip",
+      "root": "/home/usr/work/all-yolo-quantized",
+      "model_prefixes": ["yolo26", "yolo11", "yolo12"],
+      "service": "yolo26s-rtsp.service"
+    },
+    "ubuntu": {
+      "ssh_alias": "xavier-ubuntu",
+      "root": "/home/usr/work/all-yolo-quantized",
+      "model_prefixes": ["yolov9"],
+      "service": ""
+    },
+    "ubuntu-1": {
+      "ssh_alias": "xavier-ubuntu-1",
+      "root": "/home/usr/work/all-yolo-quantized",
+      "model_prefixes": ["yolov10"],
+      "service": ""
+    }
   }
 }

@@ -1,7 +1,8 @@
-"""Control parallel Rainbow preparation, sequential Xavier execution, and verified Anvil archival."""
+"""Control one Xavier's assigned models and verify their archive on Anvil."""
 
 import argparse
 import csv
+import fcntl
 import hashlib
 import json
 import shlex
@@ -12,8 +13,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RAINBOW = "/home/varun/work/all-yolo-quantized"
-XAVIER = "/home/usr/work/all-yolo-quantized"
-HOST = "soysan-over-purdue-ip"
+DEPLOYMENTS = json.loads((ROOT / "exp5/protocol.json").read_text())["deployments"]
+
+
+def deployment_for(model):
+    return next(name for name, device in DEPLOYMENTS.items() if model.startswith(tuple(device["model_prefixes"])))
 
 
 def remote(host, command):
@@ -66,6 +70,7 @@ def stage(host, root, directory, name, command):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run")
+    parser.add_argument("--device", choices=DEPLOYMENTS, default="soysan")
     args = parser.parse_args()
     if not socket.gethostname().startswith("login"):
         raise RuntimeError("The controller must run on Anvil; compute runs remotely")
@@ -73,13 +78,18 @@ def main():
         raise ValueError("Run ID may contain only letters, digits, hyphens, and underscores")
     output = ROOT / "exp5/runs" / args.run
     output.mkdir(parents=True, exist_ok=True)
+    controller_lock = (output / (args.device + ".lock")).open("w")
+    fcntl.flock(controller_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     if (output / "xavier-paused.json").exists():
         raise SystemExit("Xavier is paused for field testing; review xavier-paused.json before resuming")
     cases = list(csv.DictReader((ROOT / "exp5/models.csv").open()))
+    cases = [case for case in cases if deployment_for(case["model"]) == args.device]
+    device = DEPLOYMENTS[args.device]
+    HOST, XAVIER = device["ssh_alias"], device["root"]
     telemetry = XAVIER + "/exp5/runs/" + args.run + "/telemetry.jsonl"
     remote(HOST, "test -r " + shlex.quote(telemetry))
     remote("rainbow", "mkdir -p " + shlex.quote(RAINBOW + "/exp5/runs/" + args.run))
-    for gpu in (0, 1):
+    for gpu in (0, 1) if args.device == "soysan" else ():
         remote(
             "rainbow",
             "cd {0} && nohup bash exp5/run_prepare.sh {1} {2} </dev/null >>exp5/runs/{1}/gpu-{2}.log 2>&1 &".format(
@@ -107,10 +117,22 @@ def main():
         for name in ("fp32.onnx", "ptq.onnx", "qat.onnx", "reference.json"):
             if (local / name).exists():
                 transfer(str(local / name), HOST + ":" + xavier_dir + "/")
-        print("Running " + model + " on Xavier", flush=True)
+        remote(
+            HOST,
+            "cp {0} {1}".format(
+                shlex.quote(str(Path(telemetry).parent / "device.json")), shlex.quote(xavier_dir + "/device.json")
+            ),
+        )
+        print("Running " + model + " on " + args.device, flush=True)
         offset = xavier_dir + "/telemetry-start-line.txt"
         remote(HOST, "test -f {0} || wc -l <{1} >{0}".format(shlex.quote(offset), shlex.quote(telemetry)))
-        rc = stage(HOST, XAVIER, xavier_dir, "model", "bash exp5/run_xavier.sh " + shlex.quote(xavier_dir))
+        rc = stage(
+            HOST,
+            XAVIER,
+            xavier_dir,
+            "model",
+            "bash exp5/run_xavier.sh " + shlex.quote(xavier_dir) + " " + shlex.quote(device["service"]),
+        )
         if rc:
             raise RuntimeError("Xavier model wrapper failed; retain its artifacts for recovery")
         remote(
@@ -122,6 +144,8 @@ def main():
         checksums = remote(
             HOST, "cd {0} && find . -type f -print0 | sort -z | xargs -0 sha256sum".format(shlex.quote(xavier_dir))
         )
+        archive_lock = (output / "archive.lock").open("w")
+        fcntl.flock(archive_lock, fcntl.LOCK_EX)
         transfer(HOST + ":" + xavier_dir + "/", str(local) + "/")
         for line in checksums.splitlines():
             expected, filename = line.split("  ", 1)
@@ -135,13 +159,25 @@ def main():
         (local / "xavier.sha256").write_text(checksums + "\n")
         remote(HOST, "if test -d {0}; then rm -r -- {0}; fi".format(shlex.quote(xavier_dir)))
         (local / "archived.json").write_text(
-            json.dumps({"verified_files": len(checksums.splitlines()), "time": time.time()}, indent=2) + "\n"
+            json.dumps(
+                {"device": args.device, "verified_files": len(checksums.splitlines()), "time": time.time()}, indent=2
+            )
+            + "\n"
         )
         subprocess.run(["python3", str(ROOT / "exp5/summarize.py"), str(output)], check=True)
+        archive_lock.close()
         print("Archived and removed Xavier copy of " + model, flush=True)
     remote(HOST, "touch " + shlex.quote(XAVIER + "/exp5/runs/" + args.run + "/telemetry.stop"))
-    subprocess.run(["python3", str(ROOT / "exp5/summarize.py"), str(output)], check=True)
-    (output / "complete.json").write_text(json.dumps({"models": len(cases), "time": time.time()}, indent=2) + "\n")
+    with (output / "archive.lock").open("w") as archive_lock:
+        fcntl.flock(archive_lock, fcntl.LOCK_EX)
+        subprocess.run(["python3", str(ROOT / "exp5/summarize.py"), str(output)], check=True)
+    (output / ("complete-" + args.device + ".json")).write_text(
+        json.dumps({"models": len(cases), "time": time.time()}, indent=2) + "\n"
+    )
+    if all((output / ("complete-" + name + ".json")).exists() for name in DEPLOYMENTS):
+        (output / "complete.json").write_text(
+            json.dumps({"devices": list(DEPLOYMENTS), "time": time.time()}, indent=2) + "\n"
+        )
 
 
 if __name__ == "__main__":

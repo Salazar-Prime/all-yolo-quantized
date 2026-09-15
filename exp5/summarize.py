@@ -8,6 +8,8 @@ import re
 from collections import Counter
 from pathlib import Path
 
+from run import deployment_for
+
 
 def telemetry_window(samples, timestamps, start, end):
     selected = samples[max(0, bisect.bisect_left(timestamps, start) - 1) : bisect.bisect_right(timestamps, end) + 1]
@@ -80,6 +82,8 @@ def main():
     cases = list(csv.DictReader((Path(__file__).resolve().parent / "models.csv").open()))
     for case in cases:
         model = args.run / case["model"]
+        identity = model / "device.json"
+        device = json.loads(identity.read_text())["device"] if identity.exists() else deployment_for(model.name)
         telemetry = model / "telemetry.jsonl"
         if not telemetry.exists() and model.is_dir():
             telemetry = args.run / "telemetry.jsonl"
@@ -108,6 +112,7 @@ def main():
                     (directory / (phase + "-measurements.json")).write_text(json.dumps(measurement, indent=2) + "\n")
             row = {
                 "model": model.name,
+                "device": device,
                 "variant": variant,
                 "status": "pending",
                 "passes": len(passes),

@@ -8,7 +8,6 @@ import itertools
 import json
 import resource
 import shutil
-import socket
 import subprocess
 import sys
 import time
@@ -27,7 +26,7 @@ def main():
     parser.add_argument("--images", type=int, default=4579)
     parser.add_argument("--passes", type=int, default=3)
     args = parser.parse_args()
-    if socket.gethostname() != "soysan":
+    if "Xavier" not in Path("/proc/device-tree/model").read_text():
         raise RuntimeError("Deployment measurements must run on Xavier")
     directory = args.directory.resolve()
     artifact = directory / ("fp32.onnx" if args.variant == "onnx" else args.variant + ".engine")
@@ -179,6 +178,7 @@ def main():
         fps = 1000 / speed["inference"]
         result = {
             "model": reference["model"],
+            "device": json.loads((directory / "device.json").read_text()),
             "variant": args.variant,
             "pass": trial + 1,
             "test_images": args.images,
