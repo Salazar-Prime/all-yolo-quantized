@@ -1,5 +1,8 @@
 # Experiment 5: Xavier deployment benchmarks
 
+Paired PTQ/QAT accuracy, FPS, and resource figures, an interactive explorer, and regeneration instructions are in
+[`figure_generation/`](figure_generation/README.md). Generated outputs and their input snapshots are stored together.
+
 Exp5 distributes its 28 models across three Xavier NX devices. Each device builds and benchmarks one model at a time,
 then returns its engines and measurements to Anvil. The **Xavier Model Progress** action reports all three queues.
 All 28 models completed Rainbow preparation on September 14 at 15:14 EDT. Xavier benchmarking resumed that evening

@@ -5,3 +5,4 @@ field/
 *.plan
 .venv*/
 .cache/
+figure_generation/output/
