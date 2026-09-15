@@ -9,7 +9,7 @@ YOLO26n's four engines remain in `~/work/all-yolo-quantized/exp5/field/yolo26n/`
 marker blocks the controller until an explicit resume.
 ONNX CUDA, TensorRT FP16, and corrected INT8 PTQ passed 32-image smoke checks; all 275 ONNX profile nodes executed on CUDA.
 Rainbow preparation started on GPU 0 and GPU 1 with the YOLO26 family. GPU 0 was released on September 14 at 11:07 EDT;
-remaining preparation uses GPU 1. Each model's QAT starts from its completed validation calibration. Xavier deployment
+the remaining preparation completed on GPU 1. Each model's QAT starts from its completed validation calibration. Xavier deployment
 remains sequential within each device.
 
 | Device     | Assigned models                        | L4T    | Power mode    |
@@ -36,7 +36,8 @@ permissions.
 Use the **28 Exp2 checkpoints** evaluated by `exp3/runs/exp3-20260911/full/exp2`. That directory contains evaluation
 records; the actual weights are in `exp3/inputs/checkpoints/exp2`. `models.csv` records their repository-relative paths,
 SHA-256 hashes, file sizes, original training jobs, and corresponding evaluation records. All 28 hashes were verified
-against those records. The YOLO26 family runs first, starting with YOLO26n; remaining models follow checkpoint size order.
+against those records. The YOLO26 family finished first. Remaining models now run in ascending checkpoint size within each device, completing
+INT8 PTQ and QAT across the queue before returning to ONNX, FP32, and FP16. Verified variants are reused.
 
 Models: YOLOv9 `t/s/m/c/e`, YOLOv10 `n/s/m/b/l/x`, YOLO11 `n/s/m/l/x`, YOLO12 `n/s/m/l/x`, YOLO26 `n/s/m/l/x`, and
 YOLO26-P2 `n/s`: 28 architectures and **140 model/runtime combinations**.
@@ -73,7 +74,7 @@ exporter. Its trainer hook supplies the fully calibrated model, avoiding the nat
 default. Export and QAT preparation run on Rainbow in a mirror of this repository. Engine construction and all reported
 deployment benchmarks run on Xavier. Anvil is the control and artifact archive host. The two `run_prepare.sh` workers
 claim separate models with file locks and run each model's calibration before its QAT; device execution follows the
-manifest order.
+INT8-first, ascending-checkpoint-size order within each device.
 
 A run's `gpu-<index>.stop` file retires that Rainbow worker before another model starts and prevents its restart. The
 September 14 transition used the existing model locks to let both already-running models finish, release GPU 0 first,
@@ -124,9 +125,11 @@ energy therefore include the effect of cache reuse; inference timing excludes th
 
 ## Parallel devices and verified archive
 
-Stage the required dataset once. Transfer one model at a time, build and benchmark its variants serially on Xavier,
+Stage the required dataset once. Transfer one model at a time, build and benchmark its selected variants serially on Xavier,
 then collect its engines, ONNX/checkpoint outputs, logs, metrics, and raw telemetry into `exp5/runs/<run-id>/<model>/`
-on Anvil scratch. Verify every collected artifact with SHA-256 before deleting that model's temporary files from
+on Anvil scratch. Each variant keeps its own telemetry and device identity, so later formats can run in a different
+boot session. A variant archive receipt records each verified subset; the model archive receipt requires all five variants.
+Verify every collected artifact with SHA-256 before deleting that model's temporary files from
 Xavier. If collection fails, keep the remote artifacts and stop advancing the model queue. No generated engine remains
 on Xavier after its verified archive completes, and no engine is built on Anvil or Rainbow for the Xavier measurements.
 
@@ -179,7 +182,9 @@ and NumPy 1.23.5. `exp5/.venv-onnx` shares those packages but overrides NumPy to
 `benchmark.py` uses the native detection validator, adding real-image warmup and measurement boundaries through hooks.
 Its separate ONNX profiling pass records node placement outside measured passes. TensorRT layer inspection is saved
 alongside each engine. `telemetry.py` runs with root privileges because the board power rails are otherwise unavailable;
-creating `telemetry.stop` next to its output stops only its own collector.
+creating `telemetry.stop` next to its output stops only its own collector. The collector holds a lock on its output for
+its lifetime; the controller requires that lock to be held before launching its queue. After an unexpected restart,
+preserve the previous raw telemetry and interrupted model, record the new boot identity, and start a fresh collector.
 
 After dataset transfer and smoke validation, start a fresh privileged collector on Xavier for the production run:
 
@@ -199,11 +204,11 @@ python3 -u exp5/run.py exp5-20260914 --device ubuntu-1
 Run each command in a separate persistent process. Each controller takes a lock for its device and filters the manifest
 to its assigned families. An archive lock serializes collection and summary updates; remote benchmarks remain parallel.
 Every device requires its own privileged telemetry collector and run-level `device.json` before launch. A controller
-writes `complete-<device>.json` when its queue ends; `complete.json` requires all three queues to finish.
+runs PTQ/QAT for every remaining model before its floating-point queue, then writes `complete-<device>.json`; `complete.json` requires all three queues to finish.
 
 The controller keeps computation remote, collects artifacts after each model, verifies hashes before deleting device
 copies, and updates `results.csv` and `status.json` using `summarize.py`. It retries interrupted SSH connections and
-transfers. Completed stages and locks support resuming collection after a connection interruption. Inspect failed
+transfers. A worker that disappears without an exit record stops its controller for recovery. Inspect failed
 stage logs before deliberately retrying them with a new run ID.
 
 In this folder's PanePilot actions, select **Xavier Model Progress**, or run `bash .panepilot/actions/xavier-progress.sh`.

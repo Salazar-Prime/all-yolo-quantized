@@ -24,6 +24,7 @@ def snapshot(directory):
         "*/*/pass[123].json",
         "*/model.exit",
         "*/archived.json",
+        "*/*/archived.json",
         "*/preparation-failed.json",
     ):
         for path in root.glob(pattern):
@@ -102,7 +103,12 @@ def main():
     data = snapshot(ROOT / "exp5/runs" / run)
     paused = (ROOT / "exp5/runs" / run / "xavier-paused.json").exists()
     if paused:
-        print("Xavier benchmarks are paused for field testing.")
+        print(
+            "Xavier benchmarks are paused: "
+            + json.loads((ROOT / "exp5/runs" / run / "xavier-paused.json").read_text()).get(
+                "reason", "see pause record"
+            )
+        )
     with ThreadPoolExecutor(max_workers=len(DEPLOYMENTS)) as pool:
         futures = {
             name: pool.submit(remote_snapshot, device["ssh_alias"], device["root"] + "/exp5/runs/" + run)
@@ -125,7 +131,10 @@ def main():
         ]
         if paused:
             benchmarks = [value if value == "Done" or "FAIL" in value else "Paused" for value in benchmarks]
-        rows.append([model, device] + benchmarks + ["Done" if archived else "Wait"])
+        archived_variants = sum(
+            model + "/" + v + "/archived.json" in data["files"] for v in ("onnx", "fp32", "fp16", "ptq", "qat")
+        )
+        rows.append([model, device] + benchmarks + ["Done" if archived else "{}/5".format(archived_variants)])
     widths = [max(len(row[index]) for row in rows) for index in range(len(rows[0]))]
     print()
     for index, row in enumerate(rows):

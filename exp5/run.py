@@ -13,7 +13,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RAINBOW = "/home/varun/work/all-yolo-quantized"
-DEPLOYMENTS = json.loads((ROOT / "exp5/protocol.json").read_text())["deployments"]
+PROTOCOL = json.loads((ROOT / "exp5/protocol.json").read_text())
+DEPLOYMENTS = PROTOCOL["deployments"]
 
 
 def deployment_for(model):
@@ -63,7 +64,14 @@ def stage(host, root, directory, name, command):
         )
     while present == "pending":
         time.sleep(30)
-        present = remote(host, "if [ -f {0} ]; then cat {0}; else echo pending; fi".format(shlex.quote(status)))
+        present = remote(
+            host,
+            "if [ -f {0} ]; then cat {0}; elif flock -n {1} true; then echo interrupted; else echo pending; fi".format(
+                shlex.quote(status), shlex.quote(directory + "/" + name + ".lock")
+            ),
+        )
+    if present == "interrupted":
+        raise RuntimeError("Remote worker stopped without an exit record; preserve its artifacts before recovery")
     return int(present)
 
 
@@ -81,25 +89,28 @@ def main():
     controller_lock = (output / (args.device + ".lock")).open("w")
     fcntl.flock(controller_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     if (output / "xavier-paused.json").exists():
-        raise SystemExit("Xavier is paused for field testing; review xavier-paused.json before resuming")
+        raise SystemExit("Xavier is paused; review xavier-paused.json before resuming")
     cases = list(csv.DictReader((ROOT / "exp5/models.csv").open()))
-    cases = [case for case in cases if deployment_for(case["model"]) == args.device]
+    cases = sorted(
+        (case for case in cases if deployment_for(case["model"]) == args.device),
+        key=lambda case: int(case["checkpoint_bytes"]),
+    )
     device = DEPLOYMENTS[args.device]
     HOST, XAVIER = device["ssh_alias"], device["root"]
     telemetry = XAVIER + "/exp5/runs/" + args.run + "/telemetry.jsonl"
     remote(HOST, "test -r " + shlex.quote(telemetry))
-    remote("rainbow", "mkdir -p " + shlex.quote(RAINBOW + "/exp5/runs/" + args.run))
-    for gpu in (0, 1) if args.device == "soysan" else ():
-        remote(
-            "rainbow",
-            "cd {0} && nohup bash exp5/run_prepare.sh {1} {2} </dev/null >>exp5/runs/{1}/gpu-{2}.log 2>&1 &".format(
-                shlex.quote(RAINBOW), shlex.quote(args.run), gpu
-            ),
-        )
-    for case in cases:
+    remote(
+        HOST,
+        "flock -n -E 10 " + shlex.quote(telemetry) + " true; test $? -eq 10",
+    )
+    queue = ((case, group) for group in PROTOCOL["variant_priority"] for case in cases)
+    for case, group in queue:
         model = case["model"]
         local = output / model
         if (local / "archived.json").exists():
+            continue
+        variants = [variant for variant in group if not (local / variant / "archived.json").exists()]
+        if not variants:
             continue
         rainbow_dir = RAINBOW + "/exp5/runs/" + args.run + "/" + model
         xavier_dir = XAVIER + "/exp5/runs/" + args.run + "/" + model
@@ -114,7 +125,8 @@ def main():
             (local / "preparation-failed.json").write_text(json.dumps(case, indent=2) + "\n")
             continue
         remote(HOST, "mkdir -p " + shlex.quote(xavier_dir))
-        for name in ("fp32.onnx", "ptq.onnx", "qat.onnx", "reference.json"):
+        sources = {variant if variant in {"ptq", "qat"} else "fp32" for variant in variants}
+        for name in [source + ".onnx" for source in sorted(sources)] + ["reference.json"]:
             if (local / name).exists():
                 transfer(str(local / name), HOST + ":" + xavier_dir + "/")
         remote(
@@ -123,24 +135,17 @@ def main():
                 shlex.quote(str(Path(telemetry).parent / "device.json")), shlex.quote(xavier_dir + "/device.json")
             ),
         )
-        print("Running " + model + " on " + args.device, flush=True)
-        offset = xavier_dir + "/telemetry-start-line.txt"
-        remote(HOST, "test -f {0} || wc -l <{1} >{0}".format(shlex.quote(offset), shlex.quote(telemetry)))
+        print("Running {} ({}) on {}".format(model, ", ".join(variants), args.device), flush=True)
         rc = stage(
             HOST,
             XAVIER,
             xavier_dir,
             "model",
-            "bash exp5/run_xavier.sh " + shlex.quote(xavier_dir) + " " + shlex.quote(device["service"]),
+            "bash exp5/run_xavier.sh "
+            + " ".join(shlex.quote(arg) for arg in [xavier_dir, device["service"]] + variants),
         )
         if rc:
             raise RuntimeError("Xavier model wrapper failed; retain its artifacts for recovery")
-        remote(
-            HOST,
-            "tail -n +$(cat {0}) {1} >{2}".format(
-                shlex.quote(offset), shlex.quote(telemetry), shlex.quote(xavier_dir + "/telemetry.jsonl")
-            ),
-        )
         checksums = remote(
             HOST, "cd {0} && find . -type f -print0 | sort -z | xargs -0 sha256sum".format(shlex.quote(xavier_dir))
         )
@@ -156,14 +161,20 @@ def main():
                     digest.update(block)
             if digest.hexdigest() != expected:
                 raise RuntimeError("Archive checksum mismatch: " + str(path))
-        (local / "xavier.sha256").write_text(checksums + "\n")
+        (local / ("xavier-" + "-".join(group) + ".sha256")).write_text(checksums + "\n")
         remote(HOST, "if test -d {0}; then rm -r -- {0}; fi".format(shlex.quote(xavier_dir)))
-        (local / "archived.json").write_text(
+        receipt = (
             json.dumps(
                 {"device": args.device, "verified_files": len(checksums.splitlines()), "time": time.time()}, indent=2
             )
             + "\n"
         )
+        for variant in variants:
+            (local / variant / "archived.json").write_text(receipt)
+        if all(
+            (local / variant / "archived.json").exists() for group in PROTOCOL["variant_priority"] for variant in group
+        ):
+            (local / "archived.json").write_text(receipt)
         subprocess.run(["python3", str(ROOT / "exp5/summarize.py"), str(output)], check=True)
         archive_lock.close()
         print("Archived and removed Xavier copy of " + model, flush=True)

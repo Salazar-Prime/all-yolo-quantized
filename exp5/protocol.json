@@ -27,7 +27,13 @@
   "preparation_host": "rainbow",
   "one_model_at_a_time": "per device",
   "remove_remote_artifacts_only_after_sha256_verified_archive": true,
-  "variants": ["onnx_fp32_cuda", "tensorrt_fp32", "tensorrt_fp16", "tensorrt_int8_ptq", "tensorrt_int8_qat"],
+  "variants": [
+    "onnx_fp32_cuda",
+    "tensorrt_fp32",
+    "tensorrt_fp16",
+    "tensorrt_int8_ptq",
+    "tensorrt_int8_qat"
+  ],
   "case_count": 140,
   "data": {
     "seed": 42,
@@ -134,7 +140,11 @@
   "preparation_gpu_selection": "Initially GPU 0 and GPU 1; GPU 0 released at 2026-09-14 11:07 EDT after its current model completed. Remaining Rainbow preparation uses GPU 1, with gpu-0.stop preventing restart.",
   "production_run": "exp5-20260914",
   "smoke_run": "smoke-20260913",
-  "model_order": "Manifest order within each device: YOLOv9 on ubuntu; YOLOv10 on ubuntu-1; YOLO26, YOLO11, YOLO12 on soysan",
+  "model_order": "Ascending checkpoint_bytes within each device; all remaining INT8 PTQ/QAT before ONNX/FP32/FP16",
+  "variant_priority": [
+    ["ptq", "qat"],
+    ["onnx", "fp32", "fp16"]
+  ],
   "engine_build": {
     "workspace_mib": 1024,
     "tf32": false,

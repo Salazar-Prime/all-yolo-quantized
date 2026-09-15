@@ -84,13 +84,18 @@ def main():
         model = args.run / case["model"]
         identity = model / "device.json"
         device = json.loads(identity.read_text())["device"] if identity.exists() else deployment_for(model.name)
-        telemetry = model / "telemetry.jsonl"
-        if not telemetry.exists() and model.is_dir():
-            telemetry = args.run / "telemetry.jsonl"
-        samples = [json.loads(line) for line in telemetry.open() if line.endswith("\n")] if telemetry.exists() else []
-        timestamps = [s["monotonic"] for s in samples]
+        streams = {}
         for variant in ("onnx", "fp32", "fp16", "ptq", "qat"):
             directory = model / variant
+            telemetry = directory / "telemetry.jsonl"
+            if not telemetry.exists():
+                telemetry = model / "telemetry.jsonl"
+            if telemetry not in streams:
+                samples = (
+                    [json.loads(line) for line in telemetry.open() if line.endswith("\n")] if telemetry.exists() else []
+                )
+                streams[telemetry] = samples, [s["monotonic"] for s in samples]
+            samples, timestamps = streams[telemetry]
             passes = [json.loads(p.read_text()) for p in sorted(directory.glob("pass[123].json"))]
             for trial in passes:
                 trial["telemetry"] = telemetry_window(
