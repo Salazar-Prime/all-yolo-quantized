@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Print current Xavier benchmark and archival progress for Exp5."""
+"""Print current Xavier benchmark and archival progress for an experiment protocol."""
 
+import argparse
 import csv
 import datetime
 import inspect
@@ -17,7 +18,7 @@ def snapshot(directory):
     from pathlib import Path
 
     root = Path(directory)
-    result = {"files": {}, "active": {}}
+    result = {"files": {}, "active": {}, "controllers": []}
     for pattern in (
         "*/prepare-*.exit",
         "*/*/*.exit",
@@ -38,9 +39,16 @@ def snapshot(directory):
         args = line.split()
         if len(args) < 4:
             continue
-        script, model, variant, phase = args[-4:]
-        if script.endswith("/benchmark.py") and Path(model).parent == root:
-            result["active"][Path(model).name + "/" + variant] = phase
+        if "--device" in args and root.name in args and any(a.endswith("/run.py") for a in args):
+            result["controllers"].append(args[args.index("--device") + 1])
+        for index, arg in enumerate(args[:-3]):
+            if arg.endswith("/benchmark.py"):
+                model, variant, phase = args[index + 1 : index + 4]
+                if Path(model).parent == root:
+                    if phase == "evaluate" and "--images" in args:
+                        phase = "smoke"
+                    result["active"][Path(model).name + "/" + variant] = phase
+                break
     return result
 
 
@@ -65,21 +73,25 @@ def remote_snapshot(host, directory):
 def progress(model, variant, data, available):
     files, active = data["files"], data["active"]
     key = model + "/" + variant
-    source_phase = variant if variant in {"ptq", "qat"} else "fp32"
+    source_phase = variant.split("_")[0] if variant.startswith(("ptq", "qat")) else "fp32"
     code = files.get(model + "/prepare-" + source_phase + ".exit", "0")
     if model + "/preparation-failed.json" in files or code != "0":
         return "Prep FAIL"
-    for phase in ("build", "evaluate", "profile"):
+    for phase in ("build", "smoke", "evaluate", "profile"):
         code = files.get(key + "/" + phase + ".exit")
         if code and code != "0":
             return "FAIL " + phase[:4]
     passes = sum(key + "/pass{}.json".format(n) in files for n in (1, 2, 3))
     if key in active:
-        return {"build": "Building", "idle": "Idle", "evaluate": "Test {}/3".format(passes), "profile": "Profiling"}[
-            active[key]
-        ]
+        return {
+            "build": "Building",
+            "smoke": "Smoke check",
+            "idle": "Idle",
+            "evaluate": "Test {}/3".format(passes),
+            "profile": "Profiling",
+        }[active[key]]
     if passes == 3 and files.get(key + "/evaluate.exit") == "0":
-        if variant != "onnx" or files.get(key + "/profile.exit") == "0":
+        if variant not in {"onnx", "ptq_fp16", "qat_fp16"} or files.get(key + "/profile.exit") == "0":
             return "Done"
     if passes:
         return "Partial {}/3".format(passes)
@@ -90,29 +102,44 @@ def progress(model, variant, data, available):
 
 def main():
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "exp5"))
-    from run import DEPLOYMENTS, ROOT, deployment_for
+    from run import ROOT, deployment_for
 
-    run = json.loads((ROOT / "exp5/protocol.json").read_text())["production_run"]
-    models = [row["model"] for row in csv.DictReader((ROOT / "exp5/models.csv").open())]
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--protocol", type=Path, default=Path("exp5/protocol.json"))
+    args = parser.parse_args()
+    protocol = json.loads((ROOT / args.protocol).read_text())
+    run, deployments = protocol["production_run"], protocol["deployments"]
+    labels = {
+        "onnx": "ONNX",
+        "fp32": "TRT32",
+        "fp16": "TRT16",
+        "ptq": "INT8 PTQ",
+        "qat": "INT8 QAT",
+        "ptq_fp16": "PTQ + FP16",
+        "qat_fp16": "QAT + FP16",
+    }
+    variants = [v for v in labels if any(v in group for group in protocol["variant_priority"])]
+    models = [row["model"] for row in csv.DictReader((ROOT / protocol["model_manifest"]).open())]
+    directory = ROOT / protocol["experiment"] / "runs" / run
     print(
         "Xavier model progress: {} | {}".format(
             run, datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
         ),
         flush=True,
     )
-    data = snapshot(ROOT / "exp5/runs" / run)
-    paused = (ROOT / "exp5/runs" / run / "xavier-paused.json").exists()
+    data = snapshot(directory)
+    paused = (directory / "xavier-paused.json").exists()
     if paused:
         print(
             "Xavier benchmarks are paused: "
-            + json.loads((ROOT / "exp5/runs" / run / "xavier-paused.json").read_text()).get(
-                "reason", "see pause record"
-            )
+            + json.loads((directory / "xavier-paused.json").read_text()).get("reason", "see pause record")
         )
-    with ThreadPoolExecutor(max_workers=len(DEPLOYMENTS)) as pool:
+    with ThreadPoolExecutor(max_workers=len(deployments)) as pool:
         futures = {
-            name: pool.submit(remote_snapshot, device["ssh_alias"], device["root"] + "/exp5/runs/" + run)
-            for name, device in DEPLOYMENTS.items()
+            name: pool.submit(
+                remote_snapshot, device["ssh_alias"], device["root"] + "/" + protocol["experiment"] + "/runs/" + run
+            )
+            for name, device in deployments.items()
         }
         remotes = {name: future.result() for name, future in futures.items()}
     for name, remote in remotes.items():
@@ -121,20 +148,34 @@ def main():
         else:
             data["files"].update(remote["files"])
             data["active"].update(remote["active"])
-    rows = [["Model", "Device", "ONNX", "TRT32", "TRT16", "INT8 PTQ", "INT8 QAT", "Archive"]]
+        launch = directory / "setup" / (name + "-launch.json")
+        if (
+            launch.exists()
+            and name not in data["controllers"]
+            and not (directory / ("complete-" + name + ".json")).exists()
+        ):
+            state = json.loads(launch.read_text())
+            print(
+                name
+                + ": "
+                + {
+                    "waiting_for_runtime_and_data_transfer": "Staging files",
+                    "validating_runtime_and_dataset": "Checking runtime/dataset",
+                    "controller_started": "Controller stopped; inspect controller log",
+                    "failed": "Setup FAIL: " + state.get("error", "see launch record"),
+                }.get(state["status"], state["status"])
+            )
+    rows = [["Model", "Device"] + [labels[v] for v in variants] + ["Archive"]]
     for model in models:
         archived = model + "/archived.json" in data["files"]
-        device = deployment_for(model)
-        benchmarks = [
-            progress(model, variant, data, archived or remotes[device] is not None)
-            for variant in ("onnx", "fp32", "fp16", "ptq", "qat")
-        ]
+        device = deployment_for(model, deployments)
+        benchmarks = [progress(model, variant, data, archived or remotes[device] is not None) for variant in variants]
         if paused:
             benchmarks = [value if value == "Done" or "FAIL" in value else "Paused" for value in benchmarks]
-        archived_variants = sum(
-            model + "/" + v + "/archived.json" in data["files"] for v in ("onnx", "fp32", "fp16", "ptq", "qat")
+        archived_variants = sum(model + "/" + v + "/archived.json" in data["files"] for v in variants)
+        rows.append(
+            [model, device] + benchmarks + ["Done" if archived else "{}/{}".format(archived_variants, len(variants))]
         )
-        rows.append([model, device] + benchmarks + ["Done" if archived else "{}/5".format(archived_variants)])
     widths = [max(len(row[index]) for row in rows) for index in range(len(rows[0]))]
     print()
     for index, row in enumerate(rows):
@@ -143,8 +184,8 @@ def main():
             print("-+-".join("-" * width for width in widths))
     print(
         "\nXavier: {}/{} combinations | Archived: {}/{} models".format(
-            sum(value == "Done" for row in rows[1:] for value in row[2:7]),
-            len(models) * 5,
+            sum(value == "Done" for row in rows[1:] for value in row[2:-1]),
+            len(models) * len(variants),
             sum(row[-1] == "Done" for row in rows[1:]),
             len(models),
         )
