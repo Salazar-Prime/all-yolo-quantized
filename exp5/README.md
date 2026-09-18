@@ -3,6 +3,10 @@
 Paired PTQ/QAT accuracy, FPS, and resource figures, an interactive explorer, and regeneration instructions are in
 [`figure_generation/`](figure_generation/README.md). Generated outputs and their input snapshots are stored together.
 
+All **140 model/runtime combinations** completed three full-test passes and were archived by September 18 at 05:58 EDT.
+The complete-campaign figures and eight-slide PDF briefing are in `figure_generation/output/exp5-complete-20260918/`.
+Energy aggregates are available for 138/140 combinations; YOLO11m PTQ and YOLO12x FP16 have flagged telemetry gaps.
+
 Exp5 distributes its 28 models across three Xavier NX devices. Each device builds and benchmarks one model at a time,
 then returns its engines and measurements to Anvil. The **Xavier Model Progress** action reports all three queues.
 All 28 models completed Rainbow preparation on September 14 at 15:14 EDT. Xavier benchmarking resumed that evening
