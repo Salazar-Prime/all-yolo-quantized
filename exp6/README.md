@@ -137,3 +137,16 @@ smoke checks, per-pass metrics, and raw telemetry. Each model is archived and SH
 copy is removed. Device failures preserve remote artifacts for diagnosis. Exp5 baseline files are retained unchanged. The run also stores `exp5-baseline-results.csv` and
 `exp5-baseline-provenance.json`; older cases without a per-variant device record explicitly identify their campaign-level
 configuration as the available provenance.
+
+## Monitor progress
+
+Select **Exp6 Xavier Progress** in PanePilot for a live table that refreshes every 10 seconds. It queries only the eight
+Ubuntu devices in this experiment's protocol and combines their live state with verified Anvil archives. The table shows
+the two new variants, smoke checks, build/evaluation/profiling progress, failures, and archive counts. Setup delays and
+unavailable devices are reported explicitly. The action only reads state.
+
+For a single refresh in a terminal:
+
+```bash
+bash .panepilot/actions/xavier-progress.sh --protocol exp6/protocol.json
+```
