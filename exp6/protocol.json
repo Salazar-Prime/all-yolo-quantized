@@ -1,6 +1,6 @@
 {
   "experiment": "exp6",
-  "status": "preparing",
+  "status": "launching",
   "production_run": "exp6-20260918",
   "model_manifest": "exp5/models.csv",
   "source_archive": "exp5/runs/exp5-20260914",

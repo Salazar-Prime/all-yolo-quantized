@@ -129,8 +129,8 @@ The Ubuntu SSH aliases are defined in [ssh_config](ssh_config). Every board has 
 benchmark traffic passes through `soysan` or another benchmarking board.
 
 Controllers are started only after runtime validation, SHA-256 verification of all 9,158 dataset files, and a live
-privileged telemetry check. Initial fleet transfers finish before each receiving board benchmarks; `ubuntu`, which serves
-those transfers, waits for all six to finish. Launch records and controller logs are retained under the run directory.
+privileged telemetry check. Each board finishes its setup transfers before benchmarking. Runtime files were copied from `ubuntu`; the remaining
+dataset transfers continue directly from Anvil. Launch records and controller logs are retained under the run directory.
 
 Collected results live under `exp6/runs/exp6-20260918/`, including `results.csv`, `status.json`, per-model engine inspection,
 smoke checks, per-pass metrics, and raw telemetry. Each model is archived and SHA-256 verified before its temporary device

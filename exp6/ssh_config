@@ -1,105 +1,44 @@
 # Direct Ubuntu Xavier tunnels; soysan is excluded.
 
-Host exp6-ubuntu
+Host exp6-*
     HostName 127.0.0.1
+    User usr
+    IdentityFile ~/.ssh/id_ed25519_soysan_anvil
+    IdentitiesOnly yes
+    BatchMode yes
+    StrictHostKeyChecking yes
+    ConnectTimeout 10
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+
+Host exp6-ubuntu
     Port 2226
     HostKeyAlias 100.82.57.52
-    User usr
-    IdentityFile ~/.ssh/id_ed25519_soysan_anvil
-    IdentitiesOnly yes
-    BatchMode yes
-    StrictHostKeyChecking yes
-    ConnectTimeout 10
-    ServerAliveInterval 30
-    ServerAliveCountMax 3
 
 Host exp6-ubuntu-1
-    HostName 127.0.0.1
     Port 2227
     HostKeyAlias 100.64.106.106
-    User usr
-    IdentityFile ~/.ssh/id_ed25519_soysan_anvil
-    IdentitiesOnly yes
-    BatchMode yes
-    StrictHostKeyChecking yes
-    ConnectTimeout 10
-    ServerAliveInterval 30
-    ServerAliveCountMax 3
 
 Host exp6-ubuntu-2
-    HostName 127.0.0.1
     Port 2232
     HostKeyAlias 100.109.4.102
-    User usr
-    IdentityFile ~/.ssh/id_ed25519_soysan_anvil
-    IdentitiesOnly yes
-    BatchMode yes
-    StrictHostKeyChecking yes
-    ConnectTimeout 10
-    ServerAliveInterval 30
-    ServerAliveCountMax 3
 
 Host exp6-ubuntu-3
-    HostName 127.0.0.1
     Port 2233
     HostKeyAlias 100.104.61.80
-    User usr
-    IdentityFile ~/.ssh/id_ed25519_soysan_anvil
-    IdentitiesOnly yes
-    BatchMode yes
-    StrictHostKeyChecking yes
-    ConnectTimeout 10
-    ServerAliveInterval 30
-    ServerAliveCountMax 3
 
 Host exp6-ubuntu-4
-    HostName 127.0.0.1
     Port 2234
     HostKeyAlias 100.94.42.80
-    User usr
-    IdentityFile ~/.ssh/id_ed25519_soysan_anvil
-    IdentitiesOnly yes
-    BatchMode yes
-    StrictHostKeyChecking yes
-    ConnectTimeout 10
-    ServerAliveInterval 30
-    ServerAliveCountMax 3
 
 Host exp6-ubuntu-5
-    HostName 127.0.0.1
     Port 2235
     HostKeyAlias 100.97.80.117
-    User usr
-    IdentityFile ~/.ssh/id_ed25519_soysan_anvil
-    IdentitiesOnly yes
-    BatchMode yes
-    StrictHostKeyChecking yes
-    ConnectTimeout 10
-    ServerAliveInterval 30
-    ServerAliveCountMax 3
 
 Host exp6-ubuntu-6
-    HostName 127.0.0.1
     Port 2236
     HostKeyAlias 100.75.14.54
-    User usr
-    IdentityFile ~/.ssh/id_ed25519_soysan_anvil
-    IdentitiesOnly yes
-    BatchMode yes
-    StrictHostKeyChecking yes
-    ConnectTimeout 10
-    ServerAliveInterval 30
-    ServerAliveCountMax 3
 
 Host exp6-ubuntu-7
-    HostName 127.0.0.1
     Port 2237
     HostKeyAlias 100.122.195.115
-    User usr
-    IdentityFile ~/.ssh/id_ed25519_soysan_anvil
-    IdentitiesOnly yes
-    BatchMode yes
-    StrictHostKeyChecking yes
-    ConnectTimeout 10
-    ServerAliveInterval 30
-    ServerAliveCountMax 3
