@@ -1,0 +1,8 @@
+runs/
+inputs/
+prepared/
+field/
+*.plan
+.venv*/
+.cache/
+figure_generation/output/

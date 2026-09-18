@@ -1,0 +1,48 @@
+{
+  "checked_at_utc": "2026-09-14T01:25:04.681995+00:00",
+  "anvil_host": "login06.anvil.rcac.purdue.edu",
+  "ssh_alias_created": true,
+  "dedicated_key_created": true,
+  "public_key_installed": true,
+  "ssh_key_fingerprint": "SHA256:laWlvg7xsJKkUB90IrEFeseYuy4j3mdrWzIOInvGFuM",
+  "probes": [
+    {
+      "source": "login06.anvil.rcac.purdue.edu",
+      "destination": "192.168.100.164",
+      "port": 22,
+      "result": "connection_timeout"
+    },
+    {
+      "source": "login06.anvil.rcac.purdue.edu",
+      "destination": "100.83.255.62",
+      "port": 22,
+      "result": "connection_timeout"
+    },
+    {
+      "source": "rainbow (digital-ag)",
+      "destination": "192.168.100.164",
+      "port": 22,
+      "result": "connection_timeout"
+    },
+    {
+      "source": "rainbow (digital-ag)",
+      "destination": "100.83.255.62",
+      "port": 22,
+      "result": "connection_timeout"
+    }
+  ],
+  "anvil_requested_ip_route": "192.168.0.0/16 dev eno8303; destination routed to Anvil internal network",
+  "tailscale_available_on_anvil": false,
+  "tailscale_available_on_rainbow": false,
+  "user_computer_tailscale_access_confirmed": true,
+  "requested_relay": "127.0.0.1:2225 on login06",
+  "relay_available": true,
+  "device_inspected": true,
+  "deepstream_modified": true,
+  "experiment_started": true,
+  "key_only_login_verified": true,
+  "deepstream_unit": "user/yolo26s-rtsp.service",
+  "deepstream_original_state": "active",
+  "deepstream_current_state": "inactive",
+  "final_deployment_cases_completed": 0
+}
