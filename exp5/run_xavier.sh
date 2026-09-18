@@ -28,6 +28,17 @@ for variant in "$@"; do
         set -e
         printf '%s\n' "$rc" >"$model_dir/$variant/build.exit"
     fi
+    if (( rc == 0 )) && [[ "$variant" == *_fp16 ]]; then
+        set +e
+        "$python_bin" -u exp5/benchmark.py "$model_dir" "$variant" evaluate --images 32 --passes 1 >"$model_dir/$variant/smoke.log" 2>&1
+        rc=$?
+        set -e
+        printf '%s\n' "$rc" >"$model_dir/$variant/smoke.exit"
+        mkdir -p "$model_dir/$variant/smoke"
+        for result in "$model_dir/$variant/pass1" "$model_dir/$variant/pass1.json"; do
+            if [[ -e "$result" ]]; then mv "$result" "$model_dir/$variant/smoke/"; fi
+        done
+    fi
     if (( rc == 0 )); then
         "$python_bin" exp5/benchmark.py "$model_dir" "$variant" idle
         set +e
@@ -35,7 +46,7 @@ for variant in "$@"; do
         rc=$?
         set -e
         printf '%s\n' "$rc" >"$model_dir/$variant/evaluate.exit"
-        if [[ "$variant" == onnx ]] && (( rc == 0 )); then
+        if [[ "$variant" == onnx || "$variant" == *_fp16 ]] && (( rc == 0 )); then
             set +e
             "$python_bin" -u exp5/benchmark.py "$model_dir" "$variant" profile >"$model_dir/$variant/profile.log" 2>&1
             rc=$?

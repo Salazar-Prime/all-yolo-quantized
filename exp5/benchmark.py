@@ -21,7 +21,7 @@ sys.path.insert(0, str(ROOT))
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
-    parser.add_argument("variant", choices=("onnx", "fp32", "fp16", "ptq", "qat"))
+    parser.add_argument("variant", choices=("onnx", "fp32", "fp16", "ptq", "qat", "ptq_fp16", "qat_fp16"))
     parser.add_argument("stage", choices=("build", "evaluate", "profile", "idle"))
     parser.add_argument("--images", type=int, default=4579)
     parser.add_argument("--passes", type=int, default=3)
@@ -42,16 +42,8 @@ def main():
     if args.stage == "profile":
         import cv2
         import numpy as np
-        import onnxruntime as ort
-
         from ultralytics.data.augment import LetterBox
 
-        options = ort.SessionOptions()
-        options.enable_profiling = True
-        options.profile_file_prefix = str(output / "ort-placement")
-        session = ort.InferenceSession(
-            str(artifact), options, providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
-        )
         first_image = next(
             p
             for p in sorted((ROOT / "exp5/inputs/test/images").iterdir())
@@ -59,6 +51,27 @@ def main():
         )
         sample = LetterBox((640, 640), auto=False)(image=cv2.imread(str(first_image)))
         sample = np.ascontiguousarray(sample[:, :, ::-1].transpose(2, 0, 1))[None].astype(np.float32) / 255
+        if args.variant != "onnx":
+            sample.tofile(output / "profile-input.bin")
+            subprocess.run(
+                [
+                    "/usr/src/tensorrt/bin/trtexec",
+                    "--loadEngine=" + str(artifact),
+                    "--loadInputs=images:" + str(output / "profile-input.bin"),
+                    "--separateProfileRun",
+                    "--exportProfile=" + str(output / "profile.json"),
+                ],
+                check=True,
+            )
+            return
+        import onnxruntime as ort
+
+        options = ort.SessionOptions()
+        options.enable_profiling = True
+        options.profile_file_prefix = str(output / "ort-placement")
+        session = ort.InferenceSession(
+            str(artifact), options, providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
+        )
         session.run(None, {"images": sample})
         profile = json.loads(Path(session.end_profiling()).read_text())
         placement = [
@@ -71,7 +84,8 @@ def main():
         (output / "placement.json").write_text(json.dumps(placement, indent=2) + "\n")
         return
     if args.stage == "build":
-        source = directory / ((args.variant if args.variant in {"ptq", "qat"} else "fp32") + ".onnx")
+        method = args.variant.split("_")[0]
+        source = directory / ((method if method in {"ptq", "qat"} else "fp32") + ".onnx")
         command = [
             "/usr/src/tensorrt/bin/trtexec",
             "--onnx=" + str(source),
@@ -83,9 +97,9 @@ def main():
             "--exportLayerInfo=" + str(output / "layers.json"),
             "--timingCacheFile=" + str(directory.parent / "timing.cache"),
         ]
-        if args.variant == "fp16":
+        if args.variant.endswith("fp16"):
             command.append("--fp16")
-        elif args.variant in {"ptq", "qat"}:
+        if method in {"ptq", "qat"}:
             command.append("--int8")
         started = time.monotonic()
         result = subprocess.run(command)

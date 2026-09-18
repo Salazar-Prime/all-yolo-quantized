@@ -77,15 +77,21 @@ def telemetry_window(samples, timestamps, start, end):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run", type=Path)
+    parser.add_argument("--protocol", type=Path, default=Path(__file__).resolve().parent / "protocol.json")
     args = parser.parse_args()
+    protocol = json.loads(args.protocol.read_text())
     rows = []
-    cases = list(csv.DictReader((Path(__file__).resolve().parent / "models.csv").open()))
+    cases = list(csv.DictReader((Path(__file__).resolve().parent.parent / protocol["model_manifest"]).open()))
     for case in cases:
         model = args.run / case["model"]
         identity = model / "device.json"
-        device = json.loads(identity.read_text())["device"] if identity.exists() else deployment_for(model.name)
+        device = (
+            json.loads(identity.read_text())["device"]
+            if identity.exists()
+            else deployment_for(model.name, protocol["deployments"])
+        )
         streams = {}
-        for variant in ("onnx", "fp32", "fp16", "ptq", "qat"):
+        for variant in dict.fromkeys(v for group in protocol["variant_priority"] for v in group):
             directory = model / variant
             telemetry = directory / "telemetry.jsonl"
             if not telemetry.exists():
@@ -177,7 +183,7 @@ def main():
                     total_energy = sum(p["telemetry"]["board_energy_j"] for p in passes)
                     row["board_energy_j_per_image"] = total_energy / count
                     row["power_mean_w"] = total_energy / sum(p["end_monotonic"] - p["start_monotonic"] for p in passes)
-            for stage in ("build", "evaluate", "profile"):
+            for stage in ("build", "smoke", "evaluate", "profile"):
                 status = directory / (stage + ".exit")
                 if status.exists() and status.read_text().strip() != "0":
                     log = (directory / (stage + ".log")).read_text(errors="replace")
@@ -191,7 +197,7 @@ def main():
                     else:
                         row["status"] = phase + "_failed"
                     break
-            source_phase = variant if variant in {"ptq", "qat"} else "fp32"
+            source_phase = variant.split("_")[0] if variant.startswith(("ptq", "qat")) else "fp32"
             status = model / ("prepare-" + source_phase + ".exit")
             if (model / "preparation-failed.json").exists() or (status.exists() and status.read_text().strip() != "0"):
                 row["status"] = "preparation_failed"
