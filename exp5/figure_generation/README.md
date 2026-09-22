@@ -60,6 +60,13 @@ Every entry must have three successful full-test passes. Outputs include their o
 Dependencies used for the first render are recorded in `requirements.txt`. They are already installed in Rainbow's
 `exp5/.venv`. Generated outputs are kept locally in the repository and excluded from Git.
 
+For the requested Exp5 versus Exp6 comparison, use `--fallback-source` with a second source packet instead of `--report`.
+This reuses the snapshot reader and exporter to pair `ptq`/`qat` with `ptq_fp16`/`qat_fp16`. It produces three graphs
+(inference FPS, pipeline FPS, and paired speedups), PNG/SVG/PDF exports, a combined PDF, comparison CSVs, and source hashes.
+Each packet includes the usual metrics and a `device.json` for every selected variant; historical device identities must
+label campaign-level provenance when per-variant records are unavailable. See the
+[Exp6 results and reproduction command](../../exp6/README.md#results-int8-with-fp32-fallback-versus-fp16-enabled).
+
 Interpretation:
 
 - Positive mAP delta favors QAT; negative delta favors PTQ. The primary metric is mAP50–95; the HTML explorer also offers
