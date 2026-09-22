@@ -1,4 +1,4 @@
-"""Render Exp5 accuracy, throughput, resource figures, and a complete-campaign PDF briefing."""
+"""Render Exp5 figures and briefings, or compare its INT8 results with Exp6 FP16 fallback."""
 
 import argparse
 import csv
@@ -88,10 +88,10 @@ def load(source, output, variants=COLORS):
     return [m["model"] for m in models], records, trials, hashes
 
 
-def save(fig, output, name, title, note, slides=None, takeaway=None):
+def save(fig, output, name, title, note, slides=None, takeaway=None, device_note=DEVICE_NOTE):
     fig.suptitle(title, x=0.055, y=0.98, ha="left", fontsize=20, weight="bold", color="#162A43")
     fig.text(0.055, 0.937, PROTOCOL_NOTE, fontsize=9, color="#4E6075")
-    fig.text(0.055, 0.037, note + "\n" + DEVICE_NOTE, fontsize=9, color="#4E6075", linespacing=1.7)
+    fig.text(0.055, 0.037, note + "\n" + device_note, fontsize=9, color="#4E6075", linespacing=1.7)
     fig.subplots_adjust(top=0.88, bottom=0.12, left=0.15, right=0.97, wspace=0.4)
     if slides is not None:
         fig.subplots_adjust(top=0.84, bottom=0.30, left=0.075, right=0.975, wspace=0.40)
@@ -520,17 +520,171 @@ def report(models, records, trials, output):
     )
 
 
+def fallback_comparison(source, fallback_source, output):
+    """Compare archived INT8 configurations using the existing snapshot reader and figure exporter."""
+    models, old, old_trials, old_hashes = load(source, output / "exp5", COLORS)
+    new_models, new, new_trials, new_hashes = load(fallback_source, output / "exp6", ("ptq_fp16", "qat_fp16"))
+    if models != new_models:
+        raise ValueError("Exp5 and Exp6 must contain the same ordered models")
+    device_note = (
+        "Historical comparison: boards, L4T, automatic clocks and build tactics differ; precision is not isolated."
+    )
+    positions, paired, summary = np.arange(len(models)), [], []
+    plt.rcParams.update(
+        {"font.family": "DejaVu Sans", "font.size": 10, "axes.spines.top": False, "axes.spines.right": False}
+    )
+    for method in COLORS:
+        for model in models:
+            before, after = old[model, method], new[model, method + "_fp16"]
+            row = {"model": model, "method": method, "exp5_device": before["device"], "exp6_device": after["device"]}
+            for experiment, variant in (("exp5", method), ("exp6", method + "_fp16")):
+                identity = json.loads((output / experiment / "source" / model / variant / "device.json").read_text())
+                row[experiment + "_l4t"] = identity.get("l4t", identity.get("jetpack", "unrecorded"))
+                row[experiment + "_identity_source"] = identity.get(
+                    "device_identity_source", "per-variant device record"
+                )
+            for metric in ("inference_fps", "pipeline_fps", "map50", "map50_95"):
+                row["exp5_" + metric], row["exp6_" + metric] = before[metric], after[metric]
+                row[metric + ("_speedup" if metric.endswith("fps") else "_delta_pp")] = (
+                    after[metric] / before[metric] if metric.endswith("fps") else 100 * (after[metric] - before[metric])
+                )
+            paired.append(row)
+        for metric in ("inference_fps", "pipeline_fps"):
+            ratios = np.array([r[metric + "_speedup"] for r in paired if r["method"] == method])
+            summary.append(
+                {
+                    "method": method,
+                    "metric": metric,
+                    "models": len(models),
+                    "faster_models": int((ratios > 1).sum()),
+                    "median_speedup": float(np.median(ratios)),
+                    "min_speedup": float(ratios.min()),
+                    "max_speedup": float(ratios.max()),
+                }
+            )
+    for name, rows in (("paired_comparisons", paired), ("summary", summary)):
+        with (output / (name + ".csv")).open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+            writer.writeheader()
+            writer.writerows(rows)
+
+    with PdfPages(output / "fp32_vs_fp16_fallback.pdf") as pdf:
+        for metric, label in (("inference_fps", "Synchronized inference FPS"), ("pipeline_fps", "Pipeline FPS")):
+            fig, axes = plt.subplots(1, 2, figsize=(18, 13), sharey=True)
+            for ax, method in zip(axes, COLORS):
+                before = np.array([old[m, method][metric] for m in models])
+                after = np.array([new[m, method + "_fp16"][metric] for m in models])
+                ax.hlines(positions, before, after, color="#CBD5E1", lw=2)
+                for records, trials, variant, color, legend in (
+                    (old, old_trials, method, "#66758C", "Exp5: INT8 + FP32 fallback"),
+                    (new, new_trials, method + "_fp16", "#008879", "Exp6: INT8 + FP16 enabled"),
+                ):
+                    centers = np.array([records[m, variant][metric] for m in models])
+                    bounds = np.array([[p[metric] for p in trials[m, variant]] for m in models])
+                    ax.errorbar(
+                        centers,
+                        positions,
+                        xerr=[centers - bounds.min(1), bounds.max(1) - centers],
+                        fmt="o",
+                        ms=5,
+                        capsize=3,
+                        color=color,
+                        label=legend,
+                    )
+                ax.set(
+                    xlabel=label,
+                    yticks=positions,
+                    yticklabels=models,
+                    xlim=(0, None),
+                    title=f"{method.upper()} | median paired speedup {np.median(after / before):.2f}×",
+                )
+                ax.grid(axis="x", alpha=0.15)
+                ax.legend(loc="lower right", fontsize=9, frameon=False)
+            axes[0].invert_yaxis()
+            save(
+                fig,
+                output,
+                metric,
+                "INT8 quantization | FP32 fallback versus FP16 enabled",
+                "Dots: aggregate FPS. Whiskers: 3-pass min–max, not confidence intervals. Workspace: 1 GiB in both runs.\n"
+                "Pipeline = preprocessing + inference + postprocessing; excludes loading and metric updates.",
+                device_note=device_note,
+            )
+            # The same full-size page is used in the combined report and standalone exports.
+            pdf.savefig(fig, facecolor="white")
+
+        all_ratios = [r[k + "_speedup"] for r in paired for k in ("inference_fps", "pipeline_fps")]
+        fig, axes = plt.subplots(1, 2, figsize=(18, 13), sharey=True)
+        for ax, method in zip(axes, COLORS):
+            rows = [r for r in paired if r["method"] == method]
+            for metric, offset, color, label in (
+                ("inference_fps", -0.14, "#008879", "Inference"),
+                ("pipeline_fps", 0.14, "#D17B32", "Pipeline"),
+            ):
+                ratios = np.array([r[metric + "_speedup"] for r in rows])
+                ax.barh(positions + offset, ratios - 1, left=1, height=0.26, color=color, label=label)
+                for y, ratio in zip(positions + offset, ratios):
+                    ax.text(ratio + 0.008, y, f"{ratio:.2f}×", va="center", fontsize=8)
+            ax.axvline(1, color="#66758C", ls="--", lw=1)
+            ax.set(
+                xlabel="Speedup = Exp6 FPS / Exp5 FPS",
+                yticks=positions,
+                yticklabels=models,
+                xlim=(min(1, min(all_ratios)) - 0.02, max(1, max(all_ratios)) + 0.12),
+                title=method.upper(),
+            )
+            ax.grid(axis="x", alpha=0.15)
+            ax.legend(loc="lower right", frameon=False)
+        axes[0].invert_yaxis()
+        improved = "; ".join(
+            f"{s['method'].upper()} {s['metric'].replace('_fps', '')}: {s['faster_models']}/{s['models']} faster"
+            for s in summary
+        )
+        save(
+            fig,
+            output,
+            "speedup",
+            "Observed speedup | enabling FP16 alongside INT8",
+            "1.00× = unchanged; 1.30× = 30% higher FPS. Ratios pair the same model and quantization method.\n"
+            + improved
+            + ". Workspace: 1 GiB.",
+            device_note=device_note,
+        )
+        pdf.savefig(fig, facecolor="white")
+    (output / "provenance.json").write_text(
+        json.dumps(
+            {
+                "generated_utc": datetime.now(timezone.utc).isoformat(),
+                "exp5_input_sha256": old_hashes,
+                "exp6_input_sha256": new_hashes,
+                "renderer_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                "python": platform.python_version(),
+                "matplotlib": matplotlib.__version__,
+                "numpy": np.__version__,
+                "comparison": "Exp5 ptq/qat (--int8) vs Exp6 ptq_fp16/qat_fp16 (--int8 --fp16); workspace 1024 MiB",
+                "limitation": device_note,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    print(json.dumps(summary, indent=2))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "source", type=Path, help="Snapshot with results.csv, models.csv, protocol.json, and model/variant JSON files"
     )
     parser.add_argument("--output", type=Path, default=HERE / "output" / "latest")
-    parser.add_argument(
-        "--report", action="store_true", help="Include all five formats and an eight-slide PDF briefing"
-    )
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--report", action="store_true", help="Include all five formats and an eight-slide PDF briefing")
+    modes.add_argument("--fallback-source", type=Path, help="Exp6 snapshot to compare with the Exp5 INT8 source")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
+    if args.fallback_source:
+        fallback_comparison(args.source, args.fallback_source, args.output)
+        return
     variants = ALL_COLORS if args.report else COLORS
     models, records, trials, hashes = load(args.source, args.output, variants)
 

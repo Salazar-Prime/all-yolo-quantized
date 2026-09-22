@@ -1,6 +1,6 @@
 # Experiment 6: INT8 with FP16 for remaining layers
 
-**Status: launch in progress for `exp6-20260918`; the first engine build is running on `ubuntu-1`.**
+**Status: `exp6-20260918` completed. All 56 configurations passed, with 168 full-test passes and 28 models archived.**
 
 ## Intent
 
@@ -129,8 +129,9 @@ The Ubuntu SSH aliases are defined in [ssh_config](ssh_config). Every board has 
 benchmark traffic passes through `soysan` or another benchmarking board.
 
 Controllers are started only after runtime validation, SHA-256 verification of all 9,158 dataset files, and a live
-privileged telemetry check. Each board finishes its setup transfers before benchmarking. Runtime files were copied from `ubuntu`; the remaining
-dataset transfers continue directly from Anvil. Launch records and controller logs are retained under the run directory.
+privileged telemetry check. Each board finished its setup transfers before benchmarking. Runtime files were copied from
+`ubuntu`; the remaining datasets were transferred directly from Anvil. Launch records and controller logs are retained
+under the run directory.
 
 Collected results live under `exp6/runs/exp6-20260918/`, including `results.csv`, `status.json`, per-model engine inspection,
 smoke checks, per-pass metrics, and raw telemetry. Each model is archived and SHA-256 verified before its temporary device
@@ -150,3 +151,54 @@ For a single refresh in a terminal:
 ```bash
 bash .panepilot/actions/xavier-progress.sh --protocol exp6/protocol.json
 ```
+
+## Results: INT8 with FP32 fallback versus FP16 enabled
+
+These figures pair **Exp5 `ptq` with Exp6 `ptq_fp16`**, and **Exp5 `qat` with Exp6 `qat_fp16`**, for all 28 models.
+Both sides use INT8 quantization. The comparison is `--int8` versus `--int8 --fp16`, with the workspace held at **1 GiB**.
+The standalone FP32-only and FP16-only baselines are not included in these graphs. Enabling FP16 permits its use for
+remaining floating-point operations; it does not force every operation into FP16.
+
+| Method | Models with higher inference FPS | Median inference FPS increase | Inference increase range | Median pipeline FPS increase |
+| ------ | -------------------------------: | ----------------------------: | -----------------------: | ---------------------------: |
+| PTQ    |                            28/28 |                        +29.0% |          +6.6% to +58.7% |                       +28.7% |
+| QAT    |                            28/28 |                        +29.6% |          +7.0% to +59.4% |                       +28.3% |
+
+Pipeline FPS also increased in all 28 models for each method. Medians summarize **per-model ratios**, not ratios of
+population medians: `speedup = Exp6 FPS / Exp5 FPS`, and `increase (%) = 100 × (speedup − 1)`.
+YOLOv9c had the largest inference increase for both methods; YOLOv10n had the smallest.
+
+![Per-model inference and pipeline speedups](runs/exp6-20260918/figures/speedup.png)
+
+Open the [three-page comparison PDF](runs/exp6-20260918/figures/fp32_vs_fp16_fallback.pdf) or individual graphs:
+
+- [Inference FPS](runs/exp6-20260918/figures/inference_fps.png): absolute FPS for both configurations, separately for PTQ and QAT.
+- [Pipeline FPS](runs/exp6-20260918/figures/pipeline_fps.png): preprocessing + inference + postprocessing throughput.
+- [Speedup](runs/exp6-20260918/figures/speedup.png): inference and pipeline ratios, labeled for every model.
+
+Every graph is also available as SVG and PDF under the same filename stem. FPS dots use the archived aggregate
+throughput; whiskers show the minimum and maximum of three full-test passes, **not confidence intervals**. Pipeline
+timing excludes data loading and metric updates. All passes use 4,579 images, batch 1, and 640 × 640 inputs.
+
+Accuracy was not exactly unchanged: Exp6 minus Exp5 mAP50–95 ranged from **−0.165 to +0.148 percentage points for PTQ**
+and **−0.174 to +0.128 points for QAT**. The [paired data](runs/exp6-20260918/figures/paired_comparisons.csv) includes
+both mAP metrics, FPS values, ratios, old/new devices, L4T records, and the source of device identity. The
+[summary CSV](runs/exp6-20260918/figures/summary.csv) contains the aggregate statistics above.
+
+**Interpretation limit:** these are historical comparisons across redistributed boards and different L4T releases,
+with automatic clocks and fresh engine builds. The observed increases cannot be attributed entirely to the FP16 flag.
+See [device and software differences](#device-and-software-differences-from-exp5). Early Exp5 YOLO26n/s/m device records
+use campaign configuration because per-variant identity was unavailable; the CSV labels that provenance explicitly.
+
+The figures reuse the [existing renderer](../exp5/figure_generation/generate.py). Frozen Exp5/Exp6 source packets and
+[SHA-256 provenance](runs/exp6-20260918/figures/provenance.json) accompany the outputs. Reproduce on Rainbow:
+
+```bash
+exp5/.venv/bin/python exp5/figure_generation/generate.py \
+    exp6/runs/exp6-20260918/figures/exp5/source \
+    --fallback-source exp6/runs/exp6-20260918/figures/exp6/source \
+    --output exp6/runs/exp6-20260918/figures
+```
+
+Rendering reads archived measurements only; it does not rebuild engines or rerun benchmarks. The local figure bundle,
+including source snapshots, is kept under the ignored run directory alongside the archived experiment results.
