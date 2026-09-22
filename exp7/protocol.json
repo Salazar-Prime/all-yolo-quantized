@@ -9,8 +9,8 @@
     "exp6": "exp6/runs/exp6-20260918/results.csv"
   },
   "model_count": 28,
-  "case_count": 140,
-  "variant_priority": [["fp16", "ptq", "ptq_fp16", "qat", "qat_fp16"]],
+  "case_count": 84,
+  "variant_priority": [["fp16", "ptq_fp16", "qat_fp16"]],
   "workspace_mib": 2048,
   "tf32": false,
   "power_mode": "MODE_20W_6CORE",
@@ -78,8 +78,9 @@
       "models": ["yolov9s", "yolov9m", "yolov10b", "yolo26s", "yolo12m", "yolo26s-p2", "yolo11n"]
     }
   },
-  "baseline_policy": "Reuse archived 1 GiB baselines only. FP16/PTQ/QAT from Exp5; PTQ+FP16/QAT+FP16 from Exp6. Historical comparisons, with device, OS, thermal and timing-cache confounders.",
+  "baseline_policy": "Reuse archived 1 GiB baselines only: FP16 from Exp5; PTQ+FP16 and QAT+FP16 from Exp6. INT8 always permits FP16 fallback. Historical comparisons retain device, OS, run and timing-cache confounders.",
   "timing_cache_policy": "Fresh device-local campaign cache, shared across builds; archive before/after snapshots. Original baseline starting cache histories cannot be reproduced.",
   "telemetry_policy": "Unprivileged tegrastats records RAM, swap, utilization, clocks and temperatures. Board power/energy unavailable without sudo.",
-  "excluded_device_reason": "ubuntu-1 and ubuntu-7 offline; user requested continuation without them."
+  "excluded_device_reason": "ubuntu-1 and ubuntu-7 offline; user requested continuation without them.",
+  "precision_policy": "All new INT8 builds must enable --fp16. INT8-only PTQ/QAT results are excluded from Exp7 summaries."
 }

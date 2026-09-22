@@ -1,6 +1,6 @@
 # Experiment 7: Effect of TensorRT workspace size on model performance
 
-**Status: `exp7-20260922` is running on six Ubuntu Xavier boards; only 2 GiB engines are being built and evaluated.**
+**Status: `exp7-20260922` is continuing with FP16, PTQ + FP16, and QAT + FP16 only, all at 2 GiB.**
 
 ## Intent
 
@@ -15,20 +15,18 @@ See NVIDIA's [workspace-size guidance](https://docs.nvidia.com/deeplearning/tens
 
 ## Comparison and baseline reuse
 
-Run all **28 models** in [Exp5's manifest](../exp5/models.csv), with five new 2 GiB variants per model:
-**140 engine builds and 420 full-test passes**. Reuse archived 1 GiB results as requested; do not rebuild or reevaluate
+Run all **28 models** in [Exp5's manifest](../exp5/models.csv), with three 2 GiB variants per model:
+**84 engine configurations and 252 full-test passes**. Reuse archived 1 GiB results as requested; do not rebuild or reevaluate
 any baseline. No retraining, recalibration, or ONNX changes are needed.
 
 | Configuration   | Variant    | Precision flags | Archived 1 GiB baseline |
 | --------------- | ---------- | --------------- | ----------------------- |
 | FP16            | `fp16`     | `--fp16`        | Exp5                    |
-| INT8 PTQ        | `ptq`      | `--int8`        | Exp5                    |
 | INT8 PTQ + FP16 | `ptq_fp16` | `--int8 --fp16` | Exp6                    |
-| INT8 QAT        | `qat`      | `--int8`        | Exp5                    |
 | INT8 QAT + FP16 | `qat_fp16` | `--int8 --fp16` | Exp6                    |
 
 The new build option is `--memPoolSize=workspace:2048`; archived builds used `--memPoolSize=workspace:1024`.
-All 140 baseline rows have three completed passes and recorded 1 GiB builds with TF32 disabled. Baseline results and
+FP16 baselines come from Exp5; INT8 + FP16 baselines come from Exp6. All 84 selected baseline rows have three completed passes and recorded 1 GiB builds with TF32 disabled. Baseline results and
 provenance are saved in the run directory. Original sources are `exp5/runs/exp5-20260914` and `exp6/runs/exp6-20260918`.
 
 Reuse the identical ONNX inputs and precision flags, input shape, quantization scales, and TensorRT/CUDA versions.
@@ -41,11 +39,21 @@ configuration. Because baselines are reused, the resulting ratios are **historic
 measurements isolating workspace alone. Device, OS, clocks, thermals, competing workloads, and timing-cache history
 can differ. Report these differences rather than attributing the entire FPS change to workspace.
 
+## Precision policy correction
+
+Only `fp16`, `ptq_fp16`, and `qat_fp16` are scheduled. Every new INT8 engine enables `--fp16` for supported
+floating-point operations. INT8-only `ptq` and `qat` cases were removed at the user's request after the campaign began.
+Previously collected INT8-only artifacts are retained for provenance but excluded from the active results and monitor.
+Interrupted INT8-only work is stopped; completed FP16 and INT8 + FP16 stages are preserved when restarting queues.
+The original protocol and baseline index are retained under the run's `precision-change/` directory.
+
 ## Devices and measurement
 
-[protocol.json](protocol.json) owns the assignments. The current campaign uses the six reachable devices: `ubuntu`,
+[protocol.json](protocol.json) owns the assignments. The campaign assignments cover six devices: `ubuntu`,
 `ubuntu-2`, `ubuntu-3`, `ubuntu-4`, `ubuntu-5`, and `ubuntu-6`. The user requested proceeding without offline `ubuntu-1`
-and `ubuntu-7`; their models are redistributed across the six active boards. Exclude `soysan` from execution.
+and `ubuntu-7`; their models were redistributed across those boards. During the precision correction, `ubuntu-3`
+was recovered after a reboot and `ubuntu-6` was offline; its controller remains stopped pending recovery. Exclude
+`soysan` from execution.
 Build and evaluate one model/variant at a time per board. Anvil runs controllers and archives artifacts; inference and
 engine construction run only on Xavier.
 
@@ -71,7 +79,8 @@ protocol order on each device, with fresh warmup before each measurement pass.
 
 Reuse the existing [controller](../exp5/run.py), [benchmark](../exp5/benchmark.py), and
 [summarizer](../exp5/summarize.py). The controller sets `TRT_WORKSPACE_MIB` from the protocol; existing campaigns default
-to 1,024 MiB. The 2 GiB campaign runs smoke evaluation and separate profiling for every variant.
+to 1,024 MiB. The Xavier wrapper now defaults to `ptq_fp16` and `qat_fp16` for INT8 work. The 2 GiB campaign runs
+smoke evaluation and separate profiling for every selected variant.
 
 After device, dataset, and telemetry validation, start one persistent controller per configured device:
 
