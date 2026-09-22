@@ -10,6 +10,11 @@
       "id": "363adff6-8980-432b-9b6e-441ed6e18433",
       "name": "Exp6 Xavier Progress",
       "command": "watch -n 10 .panepilot/actions/xavier-progress.sh --protocol exp6/protocol.json"
+    },
+    {
+      "id": "bc7f502c-18d0-4a61-917b-39e872683b90",
+      "name": "Exp7 Xavier Progress",
+      "command": "watch -n 10 .panepilot/actions/xavier-progress.sh --protocol exp7/protocol.json"
     }
   ]
 }
