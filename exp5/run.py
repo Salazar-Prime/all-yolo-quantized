@@ -166,7 +166,7 @@ def main():
             XAVIER,
             xavier_dir,
             "model",
-            "bash exp5/run_xavier.sh "
+            "TRT_WORKSPACE_MIB={} bash exp5/run_xavier.sh ".format(protocol.get("workspace_mib", 1024))
             + " ".join(shlex.quote(arg) for arg in [xavier_dir, device["service"]] + variants),
         )
         if rc:

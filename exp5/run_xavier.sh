@@ -4,7 +4,7 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 model_dir="${1:?model directory required}"
 service="${2-}"
 if (( $# >= 2 )); then shift 2; else shift; fi
-if (( $# == 0 )); then set -- ptq qat onnx fp32 fp16; fi
+if (( $# == 0 )); then set -- ptq_fp16 qat_fp16 onnx fp32 fp16; fi
 telemetry="$(dirname -- "$model_dir")/telemetry.jsonl"
 export YOLO_AUTOINSTALL=false YOLO_CONFIG_DIR="$PWD/exp5/.cache/settings" MPLCONFIGDIR="$PWD/exp5/.cache/matplotlib"
 mkdir -p "$YOLO_CONFIG_DIR" "$MPLCONFIGDIR"
@@ -28,7 +28,7 @@ for variant in "$@"; do
         set -e
         printf '%s\n' "$rc" >"$model_dir/$variant/build.exit"
     fi
-    if (( rc == 0 )) && [[ "$variant" == *_fp16 ]]; then
+    if (( rc == 0 )) && [[ "$variant" == *_fp16 || "${TRT_WORKSPACE_MIB:-1024}" != 1024 ]]; then
         set +e
         "$python_bin" -u exp5/benchmark.py "$model_dir" "$variant" evaluate --images 32 --passes 1 >"$model_dir/$variant/smoke.log" 2>&1
         rc=$?
@@ -46,7 +46,7 @@ for variant in "$@"; do
         rc=$?
         set -e
         printf '%s\n' "$rc" >"$model_dir/$variant/evaluate.exit"
-        if [[ "$variant" == onnx || "$variant" == *_fp16 ]] && (( rc == 0 )); then
+        if [[ "$variant" == onnx || "$variant" == *_fp16 || "${TRT_WORKSPACE_MIB:-1024}" != 1024 ]] && (( rc == 0 )); then
             set +e
             "$python_bin" -u exp5/benchmark.py "$model_dir" "$variant" profile >"$model_dir/$variant/profile.log" 2>&1
             rc=$?

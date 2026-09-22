@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import itertools
 import json
+import os
 import resource
 import shutil
 import subprocess
@@ -90,7 +91,7 @@ def main():
             "/usr/src/tensorrt/bin/trtexec",
             "--onnx=" + str(source),
             "--saveEngine=" + str(artifact),
-            "--memPoolSize=workspace:1024",
+            "--memPoolSize=workspace:" + os.environ.get("TRT_WORKSPACE_MIB", "1024"),
             "--profilingVerbosity=detailed",
             "--buildOnly",
             "--noTF32",
@@ -101,6 +102,8 @@ def main():
             command.append("--fp16")
         if method in {"ptq", "qat"}:
             command.append("--int8")
+        if (directory.parent / "timing.cache").exists():
+            shutil.copyfile(directory.parent / "timing.cache", output / "timing-before.cache")
         started = time.monotonic()
         result = subprocess.run(command)
         formats = Counter()

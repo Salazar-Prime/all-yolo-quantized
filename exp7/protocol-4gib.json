@@ -1,0 +1,87 @@
+{
+  "experiment": "exp7",
+  "status": "running",
+  "production_run": "exp7-20260922-4gib",
+  "model_manifest": "exp5/models.csv",
+  "source_archive": "exp5/runs/exp5-20260914",
+  "baseline_results": {
+    "exp5": "exp5/runs/exp5-20260914/results.csv",
+    "exp6": "exp6/runs/exp6-20260918/results.csv"
+  },
+  "model_count": 28,
+  "case_count": 84,
+  "variant_priority": [["fp16", "ptq_fp16", "qat_fp16"]],
+  "workspace_mib": 4096,
+  "tf32": false,
+  "power_mode": "MODE_20W_6CORE",
+  "cpu_online": "0-5",
+  "retain_installed_os": true,
+  "excluded_devices": ["soysan", "ubuntu-1", "ubuntu-7"],
+  "evaluation": {
+    "image_size": [640, 640],
+    "batch_size": 1,
+    "rect": false,
+    "confidence": 0.001,
+    "nms_iou": 0.5,
+    "max_detections": 300,
+    "head_policy": "one_to_many_external_nms_matching_exp3",
+    "warmup_frames": 100,
+    "test_passes": 3,
+    "map_metrics": ["map50", "map50_95"],
+    "test_images_per_pass": 4579,
+    "timing_source": "real_test_images",
+    "record_inference_and_pipeline_fps_separately": true,
+    "record_full_pass_wall_seconds": true,
+    "cuda_synchronization_required": true
+  },
+  "deployments": {
+    "ubuntu": {
+      "ssh_alias": "exp6-ubuntu",
+      "tailscale_ip": "100.82.57.52",
+      "root": "/home/usr/work/all-yolo-quantized",
+      "service": "",
+      "models": ["yolo26n", "yolov9c", "yolov10l", "yolov9e"]
+    },
+    "ubuntu-2": {
+      "ssh_alias": "exp6-ubuntu-2",
+      "tailscale_ip": "100.109.4.102",
+      "root": "/home/usr/work/all-yolo-quantized",
+      "service": "",
+      "models": ["yolov9t", "yolo11x", "yolov10m", "yolo11m"]
+    },
+    "ubuntu-3": {
+      "ssh_alias": "exp6-ubuntu-3",
+      "tailscale_ip": "100.104.61.80",
+      "root": "/home/usr/work/all-yolo-quantized",
+      "service": "",
+      "models": ["yolov10n", "yolo12x", "yolo26m", "yolo11s"]
+    },
+    "ubuntu-4": {
+      "ssh_alias": "exp6-ubuntu-4",
+      "tailscale_ip": "100.94.42.80",
+      "root": "/home/usr/work/all-yolo-quantized",
+      "service": "",
+      "models": ["yolo12n", "yolo12l", "yolo26l", "yolov10x", "yolov10s"]
+    },
+    "ubuntu-5": {
+      "ssh_alias": "exp6-ubuntu-5",
+      "tailscale_ip": "100.97.80.117",
+      "root": "/home/usr/work/all-yolo-quantized",
+      "service": "",
+      "models": ["yolo26n-p2", "yolo26x", "yolo11l", "yolo12s"]
+    },
+    "ubuntu-6": {
+      "ssh_alias": "exp6-ubuntu-6",
+      "tailscale_ip": "100.75.14.54",
+      "root": "/home/usr/work/all-yolo-quantized",
+      "service": "",
+      "models": ["yolov9s", "yolov9m", "yolov10b", "yolo26s", "yolo12m", "yolo26s-p2", "yolo11n"]
+    }
+  },
+  "baseline_policy": "Reuse 1 GiB baselines from Exp5/Exp6 and completed 2 GiB results from Exp7. Build and evaluate only 4 GiB engines; no baseline reruns.",
+  "timing_cache_policy": "Fresh device-local campaign cache, shared across builds; archive before/after snapshots. Historical 1/2 GiB timing-cache histories and build order differ.",
+  "telemetry_policy": "Unprivileged tegrastats records RAM, swap, utilization, clocks and temperatures. Board power/energy unavailable without sudo.",
+  "excluded_device_reason": "ubuntu-1 and ubuntu-7 offline; user requested continuation without them.",
+  "precision_policy": "All new INT8 builds must enable --fp16. INT8-only PTQ/QAT results are excluded from Exp7 summaries.",
+  "comparison_2gib_run": "exp7/runs/exp7-20260922"
+}
