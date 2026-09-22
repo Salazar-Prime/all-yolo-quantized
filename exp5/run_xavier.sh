@@ -28,7 +28,7 @@ for variant in "$@"; do
         set -e
         printf '%s\n' "$rc" >"$model_dir/$variant/build.exit"
     fi
-    if (( rc == 0 )) && [[ "$variant" == *_fp16 ]]; then
+    if (( rc == 0 )) && [[ "$variant" == *_fp16 || "${TRT_WORKSPACE_MIB:-1024}" != 1024 ]]; then
         set +e
         "$python_bin" -u exp5/benchmark.py "$model_dir" "$variant" evaluate --images 32 --passes 1 >"$model_dir/$variant/smoke.log" 2>&1
         rc=$?
@@ -46,7 +46,7 @@ for variant in "$@"; do
         rc=$?
         set -e
         printf '%s\n' "$rc" >"$model_dir/$variant/evaluate.exit"
-        if [[ "$variant" == onnx || "$variant" == *_fp16 ]] && (( rc == 0 )); then
+        if [[ "$variant" == onnx || "$variant" == *_fp16 || "${TRT_WORKSPACE_MIB:-1024}" != 1024 ]] && (( rc == 0 )); then
             set +e
             "$python_bin" -u exp5/benchmark.py "$model_dir" "$variant" profile >"$model_dir/$variant/profile.log" 2>&1
             rc=$?
