@@ -1,10 +1,10 @@
 # Experiment 7: Effect of TensorRT workspace size on model performance
 
-**Status: `exp7-20260922` is continuing with FP16, PTQ + FP16, and QAT + FP16 only, all at 2 GiB.**
+**Status: 63/84 selected 2 GiB configurations are complete and archived. The separate 4 GiB campaign is running on the five reachable boards. `ubuntu-6` remains paused.**
 
 ## Intent
 
-Test whether increasing TensorRT's workspace limit from **1,024 MiB (1 GiB)** to **2,048 MiB (2 GiB)** improves inference
+Test whether increasing TensorRT's workspace limit from **1,024 MiB (1 GiB)** to **2,048 MiB (2 GiB)** and **4,096 MiB (4 GiB)** improves inference
 performance on Ubuntu Xavier NX devices. Measure inference speed, memory use, build time, and accuracy.
 
 The workspace limit affects which layer implementations TensorRT can select. A larger limit may permit faster
@@ -38,6 +38,36 @@ Exp6 changed the floating-point precision allowed alongside INT8. Exp7 changes w
 configuration. Because baselines are reused, the resulting ratios are **historical comparisons**, not paired
 measurements isolating workspace alone. Device, OS, clocks, thermals, competing workloads, and timing-cache history
 can differ. Report these differences rather than attributing the entire FPS change to workspace.
+
+## 4 GiB extension
+
+[protocol-4gib.json](protocol-4gib.json) adds a separate run, `exp7-20260922-4gib`, with
+`--memPoolSize=workspace:4096`. It uses the same 28-model assignment and the same three variants: `fp16`, `ptq_fp16`,
+and `qat_fp16`. That is 84 planned configurations and 252 measured passes. The five reachable boards cover 21 models
+and 63 configurations; the seven models assigned to offline `ubuntu-6` remain pending, as in the 2 GiB run.
+
+Reuse the existing 1 GiB and completed 2 GiB results without rerunning them. All 63 currently completed 2 GiB cases have
+three full passes and verified build commands using 2 GiB workspace, disabled TF32, and FP16 enabled. Each 4 GiB model
+runs on the same board as its 2 GiB measurement. Start a board's 4 GiB controller only after its 2 GiB queue has finished,
+and validate that the board is idle before setup. Use identical ONNX inputs, precision flags, evaluation settings,
+and software; archive fresh device identities, dataset/source checks, and build/cache records.
+
+The new campaign starts fresh per-board timing caches and retains before/after snapshots. Its cache history and variant
+order differ from the original 2 GiB campaign, which initially included INT8-only builds. Run conditions also differ,
+so this remains a historical comparison. Record memory failures and slowdowns rather than assuming 4 GiB helps.
+
+Results and setup logs live under `exp7/runs/exp7-20260922-4gib/`. This directory also holds
+`baseline-1gib-results.csv`, `baseline-1gib-provenance.json`, `baseline-2gib-results.csv`, and
+`baseline-2gib-provenance.json`. The 2 GiB snapshot distinguishes its 63 completed cases from 21 pending cases.
+
+```bash
+python3 -u exp5/run.py exp7-20260922-4gib --protocol exp7/protocol-4gib.json --device ubuntu
+bash .panepilot/actions/xavier-progress.sh --protocol exp7/protocol-4gib.json
+```
+
+PanePilot provides separate **Exp7 2 GiB Progress** and **Exp7 4 GiB Progress** actions, each refreshing every 10 seconds.
+Both show only FP16, PTQ + FP16, and QAT + FP16. Compare 4 GiB inference FPS against both the matching 2 GiB and 1 GiB
+results, alongside mAP, build time, and build/inference memory measurements. No training or recalibration is performed.
 
 ## Precision policy correction
 

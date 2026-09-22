@@ -13,8 +13,13 @@
     },
     {
       "id": "bc7f502c-18d0-4a61-917b-39e872683b90",
-      "name": "Exp7 Xavier Progress",
+      "name": "Exp7 2 GiB Progress",
       "command": "watch -n 10 .panepilot/actions/xavier-progress.sh --protocol exp7/protocol.json"
+    },
+    {
+      "id": "b0fa7c45-a07d-4028-bcca-d51157ff9c7c",
+      "name": "Exp7 4 GiB Progress",
+      "command": "watch -n 10 .panepilot/actions/xavier-progress.sh --protocol exp7/protocol-4gib.json"
     }
   ]
 }
